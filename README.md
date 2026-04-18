@@ -42,10 +42,11 @@ Live browser collaboration — Claude drives Chromium via Playwright MCP while y
 - Launches Chromium at 1400×900, sized for side-by-side with a terminal
 - Claude can navigate, click, evaluate JS, screenshot, read console/network on your instructions
 - Auto-stages files from outside the served root into a `.cowork-temp/` sandbox
+- **Mark Mode overlay** (`mark-mode.js`) — inject a floating widget to click-mark DOM elements or drag-mark free regions, attach notes, and let Claude read them via JS to know exactly what to edit
 - Does NOT auto-cleanup — server + browser stay until you say "stop cowork"
 - Optional one-time PowerToys Workspaces setup for one-click window layout
 
-**Trigger:** `/web-cowork`, "cowork on X", "launch chromium and co-work on X", "open X in browser for cowork"
+**Trigger:** `/web-cowork`, "cowork on X", "launch chromium and co-work on X", "open X in browser for cowork", "turn on mark mode"
 
 **Requires:** Playwright MCP plugin enabled, Python 3 on PATH
 
