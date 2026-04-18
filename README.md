@@ -35,6 +35,22 @@ End-of-session wrap-up that saves conversation highlights to NotebookLM as long-
 
 ---
 
+### 🌐 web-cowork
+Live browser collaboration — Claude drives Chromium via Playwright MCP while you watch and interact with the same page.
+
+- Starts a local HTTP server in the target folder (auto-picks a free port starting at 8765)
+- Launches Chromium at 1400×900, sized for side-by-side with a terminal
+- Claude can navigate, click, evaluate JS, screenshot, read console/network on your instructions
+- Auto-stages files from outside the served root into a `.cowork-temp/` sandbox
+- Does NOT auto-cleanup — server + browser stay until you say "stop cowork"
+- Optional one-time PowerToys Workspaces setup for one-click window layout
+
+**Trigger:** `/web-cowork`, "cowork on X", "launch chromium and co-work on X", "open X in browser for cowork"
+
+**Requires:** Playwright MCP plugin enabled, Python 3 on PATH
+
+---
+
 ## Installation
 
 1. Find your Claude Code skills folder:
@@ -45,6 +61,7 @@ End-of-session wrap-up that saves conversation highlights to NotebookLM as long-
 ```bash
 cp -r machine-diagnose ~/.claude/skills/
 cp -r wrap-up ~/.claude/skills/
+cp -r web-cowork ~/.claude/skills/
 ```
 
 3. Restart Claude Code — the skill appears automatically.
@@ -53,13 +70,15 @@ cp -r wrap-up ~/.claude/skills/
 
 ## Requirements
 
-Both skills use the [notebooklm-py](https://github.com/teng-lin/notebooklm-py) CLI:
+**machine-diagnose** and **wrap-up** use the [notebooklm-py](https://github.com/teng-lin/notebooklm-py) CLI:
 
 ```bash
 pip install notebooklm-py
 notebooklm login
 notebooklm status  # should show your email
 ```
+
+**web-cowork** uses the Playwright MCP plugin (enable in Claude Code) and needs Python 3 available as `python` / `python3` / `py` on PATH.
 
 ---
 
