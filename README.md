@@ -4,6 +4,14 @@ Custom skills for [Claude Code](https://claude.ai/code) — drop-in slash comman
 
 ---
 
+## Contents
+
+- **`CLAUDE.md`** — global Claude Code system prompt (personal preferences, mandatory workflows, inspector rules). Hardlinked into `~/.claude/CLAUDE.md` on each machine.
+- **`inspectors/`** — conversational role prompts. Junctioned into `~/.claude/inspectors/` on each machine. See `CLAUDE.md` for how inspectors are invoked.
+- **Skills** (see below) — drop-in slash commands.
+
+---
+
 ## Skills
 
 ### 🔧 machine-diagnose
@@ -54,6 +62,7 @@ Live browser collaboration — Claude drives Chromium via Playwright MCP while y
 
 ## Installation
 
+### Skills
 1. Find your Claude Code skills folder:
    - **Windows:** `%APPDATA%\Claude\...\skills\`
    - **Mac/Linux:** `~/.claude/skills/`
@@ -66,6 +75,31 @@ cp -r web-cowork ~/.claude/skills/
 ```
 
 3. Restart Claude Code — the skill appears automatically.
+
+### CLAUDE.md + inspectors sync (multi-machine setup)
+
+After cloning this repo to `~/claude-skills/`, link it into `~/.claude/` so edits to either location sync via git.
+
+**Windows (PowerShell, no admin needed):**
+```powershell
+# Back up existing files first
+Move-Item $HOME\.claude\CLAUDE.md $HOME\.claude\CLAUDE.md.bak -ErrorAction SilentlyContinue
+Move-Item $HOME\.claude\inspectors $HOME\.claude\inspectors.bak -ErrorAction SilentlyContinue
+
+# Hardlink the file + junction the folder (both work without admin)
+cmd /c mklink /H "$HOME\.claude\CLAUDE.md" "$HOME\claude-skills\CLAUDE.md"
+cmd /c mklink /J "$HOME\.claude\inspectors" "$HOME\claude-skills\inspectors"
+```
+
+**macOS / Linux:**
+```bash
+mv ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.bak 2>/dev/null
+mv ~/.claude/inspectors ~/.claude/inspectors.bak 2>/dev/null
+ln -s ~/claude-skills/CLAUDE.md ~/.claude/CLAUDE.md
+ln -s ~/claude-skills/inspectors ~/.claude/inspectors
+```
+
+After setup, `git pull` in `~/claude-skills/` on any machine picks up changes from the others.
 
 ---
 
