@@ -1,6 +1,10 @@
 *.env
 *.json
+!settings.json
+!package.json
+!package-lock.json
 __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
