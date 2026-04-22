@@ -12,8 +12,11 @@ Personal Claude Code configuration + custom skills, synced between Ron-PC and Ro
 | `inspectors/` | Conversational role prompts loadable by name | `~/.claude/inspectors/` (junction) |
 | `skills/` | Custom slash commands | `~/.claude/skills/` (junction) |
 | `settings.json` | Hooks, statusline, enabled plugins, model choice | `~/.claude/settings.json` (hardlink) |
+| `project-memory/<name>/` | Accumulated per-project memory (user/feedback/project/reference) | `~/.claude/projects/C--<path>/memory/` (junction, one per project) |
 
-Not synced (intentional): `settings.local.json` (per-machine Bash permissions), `.credentials.json` (auth tokens), conversation logs, plugin caches, shell snapshots.
+Not synced (intentional): `settings.local.json` (per-machine Bash permissions), `.credentials.json` (auth tokens), conversation logs (`.jsonl` session files), plugin caches, shell snapshots.
+
+**Project memory folders currently synced:** `desktop`, `weldingref`, `garageinfo`, `voicelayerapp`. Add more by dropping a folder into `project-memory/` and junctioning it (see setup below).
 
 ---
 
@@ -105,6 +108,16 @@ New-Item -ItemType Junction -Path "$HOME\claude-skills" -Target "$repo"
 
 # Machine identity for git commits (use Ron-PC or Ron-ACER)
 git config --global user.name "RonShmuely (Ron-ACER)"
+
+# Per-project memory junctions.
+# The .claude/projects/ folder name is derived from the project's absolute path
+# (Windows slashes → dashes). Adjust "ronsh" below if laptop username differs.
+$user = "ronsh"
+New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop\memory"              -Target "$repo\project-memory\desktop"
+New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop-WeldingRef\memory"   -Target "$repo\project-memory\weldingref"
+New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop-GarageInfo\memory"   -Target "$repo\project-memory\garageinfo"
+New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop-VoiceLayerAPP\memory" -Target "$repo\project-memory\voicelayerapp"
+# (each parent folder is auto-created by Claude Code on first project session; create it manually with New-Item -ItemType Directory if needed)
 ```
 
 **macOS / Linux:**
