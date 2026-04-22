@@ -12,6 +12,7 @@ Personal Claude Code configuration + custom skills, synced between Ron-PC and Ro
 | `inspectors/` | Conversational role prompts loadable by name | `~/.claude/inspectors/` (junction) |
 | `skills/` | Custom slash commands | `~/.claude/skills/` (junction) |
 | `settings.json` | Hooks, statusline, enabled plugins, model choice | `~/.claude/settings.json` (hardlink) |
+| `statusline-command.sh` | Bash script that renders the bottom status line (cwd, model, context %) | `~/.claude/statusline-command.sh` (hardlink) |
 | `project-memory/<name>/` | Accumulated per-project memory (user/feedback/project/reference) | `~/.claude/projects/C--<path>/memory/` (junction, one per project) |
 
 Not synced (intentional): `settings.local.json` (per-machine Bash permissions), `.credentials.json` (auth tokens), conversation logs (`.jsonl` session files), plugin caches, shell snapshots.
@@ -98,10 +99,11 @@ Move-Item $HOME\.claude\skills        $HOME\.claude\skills.bak -ErrorAction Sile
 Move-Item $HOME\.claude\settings.json $HOME\.claude\settings.json.bak -ErrorAction SilentlyContinue
 
 # Hardlinks for files, junctions for directories
-New-Item -ItemType HardLink -Path "$HOME\.claude\CLAUDE.md"     -Target "$repo\CLAUDE.md"
-New-Item -ItemType HardLink -Path "$HOME\.claude\settings.json" -Target "$repo\settings.json"
-New-Item -ItemType Junction -Path "$HOME\.claude\inspectors"    -Target "$repo\inspectors"
-New-Item -ItemType Junction -Path "$HOME\.claude\skills"        -Target "$repo\skills"
+New-Item -ItemType HardLink -Path "$HOME\.claude\CLAUDE.md"              -Target "$repo\CLAUDE.md"
+New-Item -ItemType HardLink -Path "$HOME\.claude\settings.json"          -Target "$repo\settings.json"
+New-Item -ItemType HardLink -Path "$HOME\.claude\statusline-command.sh"  -Target "$repo\statusline-command.sh"
+New-Item -ItemType Junction -Path "$HOME\.claude\inspectors"             -Target "$repo\inspectors"
+New-Item -ItemType Junction -Path "$HOME\.claude\skills"                 -Target "$repo\skills"
 
 # Optional: convenience junction so documented path ~/claude-skills works
 New-Item -ItemType Junction -Path "$HOME\claude-skills" -Target "$repo"
