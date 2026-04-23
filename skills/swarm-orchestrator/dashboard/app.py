@@ -250,9 +250,115 @@ def collect_agents(limit_recent_hours: float | None = None) -> list[dict]:
                     "not_checked": protocol["not_checked"],
                 })
 
+    # Assign callsigns + cluster into tasks, per session.
+    # - Callsigns: first-of-tier keeps bare name (haiku, sonnet, opus),
+    #   subsequent ones get a number (haiku2, haiku3). Reviewers get R· prefix.
+    # - Tasks: within a session, cluster consecutively-dispatched agents
+    #   (gap < TASK_GAP_SEC) into a single task; name = common description prefix.
+    TASK_GAP_SEC = 60.0
+
+    by_session: dict[str, list[dict]] = {}
+    for a in agents:
+        by_session.setdefault(a["session"], []).append(a)
+
+    for session_id, session_agents in by_session.items():
+        def first_seen(a: dict) -> float:
+            return a["mtime"] - (a.get("elapsed_seconds") or 0)
+        session_agents.sort(key=first_seen)
+
+        # --- callsigns ---
+        counts: dict[str, int] = {}
+        for a in session_agents:
+            name = a["model"] if a["model"] in ("opus", "sonnet", "haiku") else "agent"
+            counts[name] = counts.get(name, 0) + 1
+            base = name if counts[name] == 1 else f"{name}{counts[name]}"
+            desc_lower = (a.get("description") or "").lower()
+            is_reviewer = "review" in desc_lower or a.get("safety") == "high"
+            a["callsign"] = f"R·{base}" if is_reviewer else base
+
+        # --- task clustering ---
+        clusters: list[list[dict]] = []
+        current: list[dict] = []
+        last_ts: float | None = None
+        for a in session_agents:
+            start = first_seen(a)
+            if last_ts is None or (start - last_ts) <= TASK_GAP_SEC:
+                current.append(a)
+            else:
+                clusters.append(current)
+                current = [a]
+            last_ts = start
+        if current:
+            clusters.append(current)
+
+        for idx, cluster in enumerate(clusters):
+            task_id = f"{session_id}-t{idx + 1}"
+            task_name = _compute_task_name(cluster)
+            # task-level rollups
+            total_tools = sum(a.get("tool_uses") or 0 for a in cluster)
+            running_cnt = sum(1 for a in cluster if a.get("status") == "running")
+            done_cnt = len(cluster) - running_cnt
+            max_safety = max(
+                (SAFETY_RANK.get(a.get("safety", "low"), 0) for a in cluster),
+                default=0,
+            )
+            task_safety = SAFETY_REVERSE.get(max_safety, "low")
+            # wall time = latest mtime - earliest start
+            earliest = min(first_seen(a) for a in cluster)
+            latest = max(a["mtime"] for a in cluster)
+            wall_seconds = max(0, latest - earliest)
+
+            for a in cluster:
+                a["task_id"] = task_id
+                a["task_name"] = task_name
+                a["task_size"] = len(cluster)
+                a["task_running"] = running_cnt
+                a["task_done"] = done_cnt
+                a["task_tools"] = total_tools
+                a["task_safety"] = task_safety
+                a["task_wall_seconds"] = round(wall_seconds, 1)
+
     # sort: running first, then most recently active
     agents.sort(key=lambda a: (0 if a["status"] == "running" else 1, -a["mtime"]))
     return agents
+
+
+SAFETY_RANK = {"low": 0, "medium": 1, "high": 2}
+SAFETY_REVERSE = {0: "low", 1: "medium", 2: "high"}
+
+
+def _compute_task_name(cluster: list[dict]) -> str:
+    """Best-effort human-readable task name from a cluster of agents.
+
+    Strategy: find the common word prefix across descriptions (with safety
+    tags stripped). If < 2 words in common, fall back to the first agent's
+    description truncated.
+    """
+    descs = [(a.get("description") or "").strip() for a in cluster if a.get("description")]
+    if not descs:
+        return "Task"
+    # Strip [L/M/H] tags already done via strip_safety_prefix in the agent object;
+    # but description here is the stripped version (safety tag already pulled out).
+    words_list = [d.split() for d in descs]
+    if not words_list:
+        return descs[0][:48]
+    # find common prefix words
+    prefix_words: list[str] = []
+    shortest = min(len(w) for w in words_list)
+    for i in range(shortest):
+        tok = words_list[0][i]
+        if all(ws[i] == tok for ws in words_list):
+            prefix_words.append(tok)
+        else:
+            break
+    # Clean trailing punctuation and tiny connector words
+    while prefix_words and prefix_words[-1].lower() in ("-", "—", "·", "of", "for", "in", "on", "the", "a"):
+        prefix_words.pop()
+    if len(prefix_words) >= 2:
+        name = " ".join(prefix_words).rstrip(" -—·:")
+        return name[:48]
+    # Fallback: shortest description in the cluster
+    return min(descs, key=len)[:48]
 
 
 @app.route("/")
@@ -263,6 +369,11 @@ def index():
 @app.route("/theater")
 def theater():
     return render_template("theater.html")
+
+
+@app.route("/cockpit")
+def cockpit():
+    return render_template("cockpit.html")
 
 
 @app.route("/api/agents")

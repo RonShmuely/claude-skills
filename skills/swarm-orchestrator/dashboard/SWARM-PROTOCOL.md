@@ -138,3 +138,70 @@ Reviewer output goes into its own dashboard card, parented to the swarm.
 | [H] | ~1.4× | ~1.5× |
 
 Ship [L] by default. Bump to [M] when the swarm's output will drive a decision. Bump to [H] when getting it wrong costs money or customer trust.
+
+---
+
+## #6 — Post-swarm learning (close the feedback loop)
+
+The escalation count only helps if future-me reads it. Otherwise it's a metric
+that shames you but doesn't change behavior. This rule closes the loop.
+
+### After every swarm
+
+Before declaring the swarm complete, append one line to
+`~/.claude/swarm-log.md` in this exact shape:
+
+```
+- YYYY-MM-DD HH:MM · <task-pattern> · <tier-used> × <agent-count> · <escalations> esc · <cost> · <verdict>
+```
+
+Examples:
+```
+- 2026-04-23 20:07 · folder-audit (MG 5 sections) · haiku × 5 · 0 esc · $1.80 · right
+- 2026-04-23 21:15 · hebrew-manual-research · haiku × 3 · 3 esc · $0.55 · UNDER-TIERED (use sonnet)
+- 2026-04-23 22:40 · architecture-decision · opus × 1 · 0 esc · $1.20 · right
+```
+
+Verdict is exactly one of: `right` · `UNDER-TIERED` · `OVER-TIERED`.
+
+- **`right`** — all muscles returned `confidence >= 0.7`, no spot-check failed,
+  no reviewer flag. Tier was correct for the shape.
+- **`UNDER-TIERED`** — any muscle fell below `0.7` and escalated, or reviewer
+  flagged shallow work. Note which tier to use next time.
+- **`OVER-TIERED`** — muscles returned 0.95+ with trivial structured output on
+  a task a cheaper tier could handle. Downgrade recommendation next run.
+
+### Before every swarm
+
+First thing after decomposing the task, read `~/.claude/swarm-log.md` and
+grep for similar patterns:
+
+```bash
+grep -iE "(folder-audit|hebrew|diagnosis|research)" ~/.claude/swarm-log.md | tail -10
+```
+
+If you see a recent `UNDER-TIERED` verdict on a related pattern, **default up
+a tier** for the new swarm without re-arguing the case. The log is the
+precedent. Trust past-you.
+
+### Why this works
+
+- **Zero infrastructure** — plain-text log file, readable by `grep`.
+- **Stable across sessions** — lives in `~/.claude/`, loads from any project.
+- **Self-compressing** — old entries fall to the bottom; `tail` grabs recent.
+- **Honest** — writing `UNDER-TIERED` on yourself keeps the discipline real.
+
+### Anti-patterns
+
+- Writing `right` because the swarm *ran* — not because the tier was right.
+  Tier is right only if you'd do the same thing again with today's knowledge.
+- Skipping the log after a quick small swarm. The small ones are where
+  tier-match errors sneak in; log every one.
+- Never reading the log before dispatching. The log is worthless unless it
+  shapes future decisions.
+
+### What this is not
+
+This rule is not about blaming Haiku for failing. Haiku failing a task it
+shouldn't have been given is a **dispatch error** by the orchestrator. The
+log holds the orchestrator accountable, not the muscle.

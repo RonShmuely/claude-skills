@@ -174,6 +174,21 @@
   .tag.sonnet  { color: #a0c8ff; border-color: #5080c0; background: rgba(40,70,120,.2); }
   .tag.haiku   { color: #a0e5c0; border-color: #50a080; background: rgba(40,100,70,.2); }
   .tag.unknown { color: #999;    border-color: #333;   background: rgba(30,30,30,.2); }
+
+  /* Callsign — speakable agent ID */
+  .callsign {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 18px; padding: 0 7px;
+    border-radius: 3px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid; color: #fff;
+    white-space: nowrap;
+  }
+  .callsign.opus     { background: rgba(200,90,168,.3); border-color: #d080c0; }
+  .callsign.sonnet   { background: rgba(90,136,208,.3); border-color: #80a0e0; }
+  .callsign.haiku    { background: rgba(90,176,136,.3); border-color: #80c0a0; }
+  .callsign.reviewer { background: var(--crimson); border-color: var(--crimson-hot); box-shadow: 0 0 10px rgba(225,6,0,.6); }
   .safety {
     font-size: 9px;
     padding: 2px 5px;
@@ -421,9 +436,14 @@ function render(agents) {
       ? `<div class="tool">→ ${esc(a.last_tool)}${a.last_tool_input ? ' · ' + esc(a.last_tool_input.slice(0, 40)) : ''}</div>`
       : (a.final_text && a.status === 'done' ? `<div class="tool">✓ complete · ${a.tool_uses} tools</div>` : '');
 
+    const callsign = a.callsign || a.short_id;
+    const isReviewer = callsign.startsWith('R·');
+    const csClass = isReviewer ? 'reviewer' : modelClass;
+
     card.innerHTML = `
       <div class="head">
         <div class="dot ${a.status}"></div>
+        <span class="callsign ${csClass}">${esc(callsign)}</span>
         <span class="tag ${modelClass} mono">${a.model}</span>
         ${safetyPill(a.safety)}
         ${confPill(a.confidence)}

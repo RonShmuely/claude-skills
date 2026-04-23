@@ -7,19 +7,24 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Crect x='13' y='7' width='6' height='18' fill='%23e10600'/%3E%3C/svg%3E" />
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        colors: {
-          crimson: { 400: '#ff3a30', 500: '#E10600', 600: '#C20500' },
-        },
-      },
-    },
-  };
+  window.INITIAL_MODE = "{{ initial_mode|default('dashboard') }}";
+  tailwind.config = { theme: { extend: { colors: { crimson: { 400:'#ff3a30', 500:'#E10600', 600:'#C20500' } } } } };
 </script>
 <style>
-  body { background: #060606; color: #e5e5e5; font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif; }
+  :root {
+    --crimson:      #E10600;
+    --crimson-hot:  #FF3A30;
+    --crimson-dim:  #5A0200;
+    --crimson-deep: #2A0100;
+  }
+  * { box-sizing: border-box; }
+  body { background: #060606; color: #e5e5e5; font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif; margin: 0; }
   .mono { font-family: 'JetBrains Mono', 'Geist Mono', 'IBM Plex Mono', ui-monospace, monospace; }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-thumb { background:#262626; border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:#404040; }
+
+  /* Shared animations */
   .pulse-red { animation: pulse-red 1.2s ease-in-out infinite; }
   @keyframes pulse-red {
     0%,100% { box-shadow: 0 0 0 0 rgba(225,6,0,.75); }
@@ -27,16 +32,33 @@
   }
   .cursor-blink::after { content:'▮'; color:#e10600; margin-left:4px; animation:blink 1.05s step-end infinite; }
   @keyframes blink { 50% { opacity: 0; } }
-  ::-webkit-scrollbar { width:6px; height:6px; }
-  ::-webkit-scrollbar-thumb { background:#262626; border-radius:3px; }
-  ::-webkit-scrollbar-thumb:hover { background:#404040; }
-  .scanlines {
-    background-image: linear-gradient(rgba(255,255,255,.02) 50%, transparent 50%);
-    background-size: 100% 3px;
-  }
+  .scanlines { background-image: linear-gradient(rgba(255,255,255,.02) 50%, transparent 50%); background-size: 100% 3px; }
   .text-glow-red { text-shadow: 0 0 8px rgba(225,6,0,.5); }
 
-  /* card animations */
+  /* Mode switcher */
+  .mode-switch {
+    display: inline-flex; gap: 2px;
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; padding: 2px;
+  }
+  .mode-btn {
+    padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    color: #888; background: transparent; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+    transition: all .15s; text-transform: uppercase;
+  }
+  .mode-btn:hover { color: #ddd; background: #151515; }
+  .mode-btn.active { color: #fff; background: var(--crimson); box-shadow: 0 0 10px rgba(225,6,0,.4); }
+  .mode-btn svg { width: 12px; height: 12px; vertical-align: middle; margin-right: 4px; }
+
+  /* Mode panels — only active one shows */
+  .mode-panel { display: none; animation: fade-in .4s ease; }
+  .mode-panel.active { display: block; }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  /* -------- DASHBOARD MODE -------- */
+  body.mode-dashboard { background: #060606; }
+  body.mode-dashboard .dashboard-chrome { display: inline-flex; }
+
   .card { transition: border-color .15s, transform .15s, box-shadow .15s; }
   .card:hover { transform: translateY(-1px); }
   .card-body { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
@@ -45,55 +67,207 @@
   .chev { transition: transform .2s ease; display: inline-block; }
   .card.expanded .chev { transform: rotate(90deg); }
 
-  /* group collapse */
   .group-body { overflow: hidden; transition: max-height .35s ease, opacity .25s ease; }
   .group.collapsed .group-body { max-height: 0 !important; opacity: 0; }
   .group.collapsed .group-chev { transform: rotate(-90deg); }
   .group-chev { transition: transform .2s ease; display: inline-block; }
 
   .kbd { font-family: 'JetBrains Mono', monospace; background:#171717; border:1px solid #262626; border-radius:3px; padding:1px 5px; font-size:10px; color:#9ca3af; }
+
+  /* -------- THEATER MODE -------- */
+  body.mode-theater { background: #000; overflow: hidden; cursor: none; }
+  body.mode-theater:hover { cursor: default; }
+  body.mode-theater .dashboard-chrome { display: none !important; }
+  body.mode-theater #header { background: rgba(0,0,0,0.5); border-bottom-color: rgba(225,6,0,0.2); }
+
+  .theater-stage {
+    position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
+    display: grid; place-items: center; overflow: hidden;
+  }
+  .theater-stage::before {
+    content: ''; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at center, rgba(225,6,0,0.06) 0%, rgba(225,6,0,0) 55%),
+      radial-gradient(ellipse at center, #050505 0%, #000 85%);
+    pointer-events: none;
+  }
+
+  .brain-wrap {
+    position: relative; width: 360px; height: 360px;
+    display: grid; place-items: center; z-index: 3;
+  }
+  .brain-wrap::after {
+    content: ''; position: absolute; inset: -60px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(225,6,0,0.35) 0%, rgba(225,6,0,0) 60%);
+    animation: halo-pulse 2.6s ease-in-out infinite; pointer-events: none;
+  }
+  @keyframes halo-pulse {
+    0%,100% { opacity: .5; transform: scale(1); }
+    50%     { opacity: 1;  transform: scale(1.06); }
+  }
+  .brain-svg { width: 280px; height: 280px; filter: drop-shadow(0 0 16px rgba(225,6,0,.55)); }
+  .brain-svg path, .brain-svg circle { stroke: var(--crimson); fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .brain-svg .glow { stroke: var(--crimson-hot); stroke-width: 1.8; opacity: .9; }
+  .brain-pulse { transform-origin: center; animation: brain-breathe 3.4s ease-in-out infinite; }
+  @keyframes brain-breathe {
+    0%,100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(225,6,0,.55)); }
+    50%     { transform: scale(1.04); filter: drop-shadow(0 0 28px rgba(225,6,0,.85)); }
+  }
+  .brain-label {
+    position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+    text-align: center; white-space: nowrap;
+    letter-spacing: 0.24em; font-size: 11px; text-transform: uppercase;
+    color: var(--crimson-hot); text-shadow: 0 0 10px rgba(225,6,0,.9);
+  }
+  .brain-label .big { display: block; font-size: 14px; letter-spacing: 0.35em; font-weight: 700; }
+  .brain-label .sub { display: block; margin-top: 4px; color: #bbb; font-size: 10px; letter-spacing: 0.2em; }
+
+  #arcs { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+  .arc { fill: none; stroke: var(--crimson-dim); stroke-width: 1; stroke-dasharray: 4 6; opacity: .7; }
+  .arc.running { stroke: var(--crimson); stroke-dasharray: 4 4; animation: dash-run 1.6s linear infinite; opacity: 1; filter: drop-shadow(0 0 6px rgba(225,6,0,.7)); }
+  @keyframes dash-run { to { stroke-dashoffset: -100; } }
+  .arc.done { stroke: var(--crimson); stroke-dasharray: 0; stroke-width: 1.5; opacity: .9; }
+
+  .theater-card {
+    position: absolute; width: 240px;
+    background: rgba(10,10,10,0.92);
+    border: 1px solid var(--crimson-deep);
+    border-radius: 10px; padding: 10px 12px;
+    backdrop-filter: blur(6px); z-index: 4;
+    opacity: 0; transform: scale(0.85);
+    animation: card-enter .45s cubic-bezier(.2,.8,.3,1.2) forwards;
+    transform-origin: center;
+  }
+  .theater-card.running { border-color: var(--crimson); box-shadow: 0 0 24px rgba(225,6,0,.35); }
+  .theater-card.done    { border-color: rgba(225,6,0,.4); }
+  @keyframes card-enter { to { opacity: 1; transform: scale(1); } }
+
+  /* -------- COMPACT MODE -------- */
+  body.mode-compact { background: #060606; }
+  body.mode-compact .dashboard-chrome { display: inline-flex; }
+  .compact-row {
+    display: grid;
+    grid-template-columns: 10px 70px 60px 28px 50px 1fr 140px 40px 80px;
+    gap: 10px; align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid #141414;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #bbb;
+    transition: background .15s;
+    cursor: pointer;
+  }
+  .compact-row:hover { background: #0f0f0f; }
+  .compact-row.running { border-left: 2px solid var(--crimson); }
+  .compact-header {
+    display: grid;
+    grid-template-columns: 10px 70px 60px 28px 50px 1fr 140px 40px 80px;
+    gap: 10px; padding: 8px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: #555;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    position: sticky; top: 48px; background: #060606; z-index: 5;
+  }
 </style>
 </head>
-<body class="min-h-screen scanlines">
 
-<header class="sticky top-0 z-20 bg-black/85 backdrop-blur border-b border-neutral-900 px-4 py-2.5">
+<body>
+
+<!-- UNIFIED HEADER -->
+<header id="header" class="sticky top-0 z-20 bg-black/85 backdrop-blur border-b border-neutral-900 px-4 py-2">
   <div class="flex items-center gap-3 flex-wrap">
+
+    <!-- Brand -->
     <div class="flex items-center gap-2 shrink-0">
       <span class="text-crimson-500 text-xl mono text-glow-red">▮</span>
       <span class="mono text-xs tracking-widest text-neutral-300 uppercase">swarm monitor</span>
       <span id="live-indicator" class="cursor-blink text-neutral-500 text-[11px] mono">connecting</span>
     </div>
 
-    <div class="flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
+    <!-- Mode switcher -->
+    <div class="mode-switch shrink-0" role="tablist">
+      <button class="mode-btn" data-mode="dashboard" title="grid · work mode (d)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>dash
+      </button>
+      <button class="mode-btn" data-mode="theater" title="brain · presentation (t)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><circle cx="8" cy="8" r="6" stroke-dasharray="2 2"/></svg>theater
+      </button>
+      <button class="mode-btn" data-mode="compact" title="dense rows (c)">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/></svg>compact
+      </button>
+    </div>
+
+    <!-- Dashboard-only chrome -->
+    <div class="dashboard-chrome flex items-center gap-2 flex-1 min-w-[220px] max-w-md">
       <svg class="w-3.5 h-3.5 text-neutral-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-      <input id="search" placeholder="search description · id · tool name" class="w-full bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-xs text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-crimson-500" />
+      <input id="search" placeholder="search description · id · tool" class="w-full bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-xs text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-crimson-500" />
       <span class="kbd shrink-0">/</span>
     </div>
 
-    <select id="sort" class="bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-300 focus:outline-none focus:border-crimson-500">
-      <option value="recent">recent</option>
-      <option value="tools">tool count</option>
-      <option value="elapsed">elapsed</option>
-      <option value="model">model</option>
+    <select id="sort" class="dashboard-chrome bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-300 focus:outline-none focus:border-crimson-500">
+      <option value="recent">recent</option><option value="tools">tool count</option><option value="elapsed">elapsed</option><option value="model">model</option>
     </select>
-    <select id="filter" class="bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-300 focus:outline-none focus:border-crimson-500">
-      <option value="all">all</option>
-      <option value="running">running</option>
-      <option value="done">done</option>
+    <select id="filter" class="dashboard-chrome bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-300 focus:outline-none focus:border-crimson-500">
+      <option value="all">all</option><option value="running">running</option><option value="done">done</option>
     </select>
-    <button id="expand-all" class="bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-400 hover:text-neutral-200 hover:border-crimson-500">expand all</button>
-    <button id="collapse-all" class="bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-400 hover:text-neutral-200 hover:border-crimson-500">collapse all</button>
+    <button id="expand-all" class="dashboard-chrome bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-400 hover:text-neutral-200 hover:border-crimson-500">expand</button>
+    <button id="collapse-all" class="dashboard-chrome bg-neutral-950 border border-neutral-900 rounded px-2 py-1 mono text-[11px] text-neutral-400 hover:text-neutral-200 hover:border-crimson-500">collapse</button>
 
     <div id="stats" class="ml-auto text-[11px] text-neutral-400 mono"></div>
   </div>
 </header>
 
-<main class="p-4 space-y-3">
+<!-- DASHBOARD MODE -->
+<main id="mode-dashboard" class="mode-panel p-4 space-y-3 scanlines min-h-screen">
   <div id="sessions"></div>
-  <div id="empty" class="hidden text-center text-neutral-600 text-sm mono py-16">no agents match</div>
+  <div id="empty-dashboard" class="hidden text-center text-neutral-600 text-sm mono py-16">no agents match</div>
 </main>
 
-<!-- modal for deep inspection -->
+<!-- THEATER MODE -->
+<main id="mode-theater" class="mode-panel">
+  <div class="theater-stage">
+    <svg id="arcs"></svg>
+    <div class="brain-wrap">
+      <svg class="brain-svg brain-pulse" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 100 20 C 70 20, 42 38, 42 72 C 30 80, 28 102, 42 118 C 40 140, 58 158, 78 158 C 80 172, 92 180, 100 180 C 108 180, 120 172, 122 158 C 142 158, 160 140, 158 118 C 172 102, 170 80, 158 72 C 158 38, 130 20, 100 20 Z" />
+        <path d="M 100 20 C 98 60, 102 100, 100 180" class="glow" />
+        <path d="M 60 55 C 68 60, 72 68, 70 78" />
+        <path d="M 52 85 C 60 88, 68 86, 72 92" />
+        <path d="M 50 110 C 58 112, 66 110, 68 118" />
+        <path d="M 60 135 C 66 140, 74 140, 80 136" />
+        <path d="M 78 155 C 85 155, 88 150, 92 150" />
+        <path d="M 140 55 C 132 60, 128 68, 130 78" />
+        <path d="M 148 85 C 140 88, 132 86, 128 92" />
+        <path d="M 150 110 C 142 112, 134 110, 132 118" />
+        <path d="M 140 135 C 134 140, 126 140, 120 136" />
+        <path d="M 122 155 C 115 155, 112 150, 108 150" />
+        <circle cx="70"  cy="72"  r="2"   fill="#E10600" stroke="none" />
+        <circle cx="130" cy="72"  r="2"   fill="#E10600" stroke="none" />
+        <circle cx="68"  cy="110" r="2"   fill="#FF3A30" stroke="none" />
+        <circle cx="132" cy="110" r="2"   fill="#FF3A30" stroke="none" />
+        <circle cx="100" cy="90"  r="3"   fill="#FF3A30" stroke="none" />
+        <circle cx="100" cy="130" r="2.5" fill="#E10600" stroke="none" />
+      </svg>
+      <div class="brain-label mono">
+        <span class="big">CLAUDE OPUS 4.7</span>
+        <span class="sub">orchestrator · brain</span>
+      </div>
+    </div>
+  </div>
+  <div id="empty-theater" class="hidden absolute left-1/2 bottom-12 -translate-x-1/2 text-[11px] mono text-neutral-600 uppercase tracking-widest">no agents in session · fire a swarm</div>
+</main>
+
+<!-- COMPACT MODE -->
+<main id="mode-compact" class="mode-panel">
+  <div class="compact-header">
+    <span></span><span>call</span><span>model</span><span>sfty</span><span>conf</span>
+    <span>description</span><span>tool · activity</span><span>tools</span><span>elapsed</span>
+  </div>
+  <div id="compact-list"></div>
+  <div id="empty-compact" class="hidden text-center text-neutral-600 text-sm mono py-16">no agents match</div>
+</main>
+
+<!-- Modal (dashboard mode deep-dive) -->
 <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-30 p-6" onclick="if(event.target.id==='modal') closeModal()">
   <div class="bg-neutral-950 border border-neutral-800 rounded-lg max-w-3xl w-full max-h-[85vh] overflow-y-auto">
     <div class="p-6">
@@ -118,25 +292,41 @@
 </div>
 
 <script>
+// ============================================================================
+// SHARED STATE
+// ============================================================================
 const MODEL_STYLES = {
-  opus:    { badge:'bg-purple-950/60 border-purple-500/60 text-purple-300',   ring:'hover:border-purple-500/40' },
-  sonnet:  { badge:'bg-blue-950/60 border-blue-500/60 text-blue-300',         ring:'hover:border-blue-500/40' },
-  haiku:   { badge:'bg-emerald-950/60 border-emerald-500/60 text-emerald-300',ring:'hover:border-emerald-500/40' },
-  unknown: { badge:'bg-neutral-900 border-neutral-700 text-neutral-400',      ring:'hover:border-neutral-700' },
+  opus:    { badge:'bg-purple-950/60 border-purple-500/60 text-purple-300',    theater:'opus',    ring:'hover:border-purple-500/40' },
+  sonnet:  { badge:'bg-blue-950/60 border-blue-500/60 text-blue-300',          theater:'sonnet',  ring:'hover:border-blue-500/40' },
+  haiku:   { badge:'bg-emerald-950/60 border-emerald-500/60 text-emerald-300', theater:'haiku',   ring:'hover:border-emerald-500/40' },
+  unknown: { badge:'bg-neutral-900 border-neutral-700 text-neutral-400',       theater:'unknown', ring:'hover:border-neutral-700' },
+};
+const SAFETY_STYLES = {
+  low:    { badge:'bg-neutral-900 border-neutral-700 text-neutral-400',      letter:'L' },
+  medium: { badge:'bg-amber-950/60 border-amber-500/60 text-amber-300',     letter:'M' },
+  high:   { badge:'bg-crimson-950/60 border-crimson-500/60 text-crimson-300',letter:'H' },
 };
 
 let LATEST = [];
 let FILTER = 'all';
 let SORT = 'recent';
 let QUERY = '';
-let EXPANDED = new Set();                // agent ids expanded inline
-let SESSIONS_COLLAPSED = new Set();      // session ids collapsed
+let EXPANDED = new Set();
+let SESSIONS_COLLAPSED = new Set();
 let FIRST_RENDER = true;
+let MODE = window.INITIAL_MODE || 'dashboard';
 
+// theater mode state
+let theaterCardsByAgent = new Map();
+let theaterArcsByAgent = new Map();
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
 function fmtDuration(s) {
   if (s == null) return '—';
   if (s < 60) return s.toFixed(1) + 's';
-  const m = Math.floor(s / 60), r = Math.round(s % 60);
+  const m = Math.floor(s/60), r = Math.round(s%60);
   return `${m}m ${r}s`;
 }
 function fmtAge(s) {
@@ -147,25 +337,49 @@ function fmtAge(s) {
   return Math.floor(s/86400) + 'd ago';
 }
 function esc(s) {
-  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function statusDot(s) {
   return s === 'running'
-    ? '<div class="w-2 h-2 rounded-full bg-crimson-500 pulse-red" title="running"></div>'
-    : '<div class="w-2 h-2 rounded-full bg-neutral-700" title="done"></div>';
+    ? '<div class="w-2 h-2 rounded-full bg-crimson-500 pulse-red"></div>'
+    : '<div class="w-2 h-2 rounded-full bg-neutral-700"></div>';
 }
-
+function confidencePill(c) {
+  if (c == null) return '';
+  const pct = Math.round(c * 100);
+  let color;
+  if (c >= 0.85)      color = 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300';
+  else if (c >= 0.70) color = 'bg-amber-950/60 border-amber-500/50 text-amber-300';
+  else                color = 'bg-crimson-950/60 border-crimson-500/60 text-crimson-300';
+  return `<span class="px-1.5 py-0.5 rounded border text-[10px] mono ${color}" title="confidence ${pct}%">⌖ ${pct}%</span>`;
+}
+function safetyPill(s) {
+  const style = SAFETY_STYLES[s] || SAFETY_STYLES.low;
+  return `<span class="px-1.5 py-0.5 rounded border text-[10px] mono uppercase ${style.badge}">[${style.letter}]</span>`;
+}
+function callsignPill(cs, model) {
+  if (!cs) return '';
+  const isReviewer = cs.startsWith('R·');
+  const base =
+    model === 'opus'   ? 'bg-purple-950/70 border-purple-400 text-purple-100' :
+    model === 'sonnet' ? 'bg-blue-950/70 border-blue-400 text-blue-100' :
+    model === 'haiku'  ? 'bg-emerald-950/70 border-emerald-400 text-emerald-100' :
+                         'bg-neutral-900 border-neutral-600 text-neutral-200';
+  const cls = isReviewer
+    ? 'bg-crimson-600 border-crimson-400 text-white'
+    : base;
+  return `<span class="px-1.5 py-0.5 rounded border text-[10px] mono font-bold tracking-wider ${cls}" title="callsign">${cs}</span>`;
+}
 function match(a) {
   if (FILTER !== 'all' && a.status !== FILTER) return false;
   if (!QUERY) return true;
   const q = QUERY.toLowerCase();
   return (a.description||'').toLowerCase().includes(q)
       || (a.id||'').toLowerCase().includes(q)
+      || (a.callsign||'').toLowerCase().includes(q)
       || (a.model||'').toLowerCase().includes(q)
       || (a.tool_history||[]).join(' ').toLowerCase().includes(q);
 }
-
 function sortAgents(agents) {
   const cmp = {
     recent:  (a,b) => b.mtime - a.mtime,
@@ -173,13 +387,11 @@ function sortAgents(agents) {
     elapsed: (a,b) => (b.elapsed_seconds||0) - (a.elapsed_seconds||0),
     model:   (a,b) => a.model.localeCompare(b.model) || (b.mtime - a.mtime),
   }[SORT] || ((a,b) => b.mtime - a.mtime);
-  // running always first within sort
   return [...agents].sort((a,b) => {
     if (a.status !== b.status) return a.status === 'running' ? -1 : 1;
     return cmp(a,b);
   });
 }
-
 function groupBySession(agents) {
   const groups = new Map();
   for (const a of agents) {
@@ -198,53 +410,23 @@ function groupBySession(agents) {
   return out;
 }
 
-const SAFETY_STYLES = {
-  low:    { badge:'bg-neutral-900 border-neutral-700 text-neutral-400', letter:'L', label:'low-stakes' },
-  medium: { badge:'bg-amber-950/60 border-amber-500/60 text-amber-300', letter:'M', label:'medium-stakes' },
-  high:   { badge:'bg-crimson-950/60 border-crimson-500/60 text-crimson-300', letter:'H', label:'high-stakes' },
-};
-
-function confidencePill(c) {
-  if (c == null) return '';
-  const pct = Math.round(c * 100);
-  let color;
-  if (c >= 0.85)      color = 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300';
-  else if (c >= 0.70) color = 'bg-amber-950/60 border-amber-500/50 text-amber-300';
-  else                color = 'bg-crimson-950/60 border-crimson-500/60 text-crimson-300';
-  return `<span class="px-1.5 py-0.5 rounded border text-[10px] mono ${color}" title="confidence ${pct}%">⌖ ${pct}%</span>`;
-}
-
-function safetyPill(s) {
-  const style = SAFETY_STYLES[s] || SAFETY_STYLES.low;
-  return `<span class="px-1.5 py-0.5 rounded border text-[10px] mono uppercase ${style.badge}" title="${style.label}">[${style.letter}]</span>`;
-}
-
-function cardHtml(a) {
+// ============================================================================
+// DASHBOARD MODE
+// ============================================================================
+function dashCardHtml(a) {
   const style = MODEL_STYLES[a.model] || MODEL_STYLES.unknown;
   const expanded = EXPANDED.has(a.id) ? ' expanded' : '';
-  const toolPill = a.last_tool
-    ? `<span class="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300 text-[11px] mono">${esc(a.last_tool)}</span>`
-    : '';
-  const inputSnip = a.last_tool_input
-    ? `<span class="text-[11px] mono text-neutral-500 truncate">${esc(a.last_tool_input)}</span>`
-    : '';
-  const lastText = a.last_text
-    ? `<div class="text-[11px] text-neutral-400 mt-2 italic line-clamp-2">"${esc(a.last_text.slice(0,220))}"</div>`
-    : '';
-  const toolChips = (a.tool_history||[]).map(t =>
-    `<span class="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-[10px] mono text-neutral-400">${esc(t)}</span>`
-  ).join('');
-  const finalText = a.final_text
-    ? `<pre class="text-[11px] text-neutral-300 whitespace-pre-wrap mono bg-black/60 border border-neutral-900 rounded p-2 max-h-48 overflow-y-auto">${esc(a.final_text)}</pre>`
-    : '<div class="text-[11px] mono text-neutral-600 italic">(no final text yet)</div>';
-
+  const toolPill = a.last_tool ? `<span class="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300 text-[11px] mono">${esc(a.last_tool)}</span>` : '';
+  const inputSnip = a.last_tool_input ? `<span class="text-[11px] mono text-neutral-500 truncate">${esc(a.last_tool_input)}</span>` : '';
+  const lastText = a.last_text ? `<div class="text-[11px] text-neutral-400 mt-2 italic line-clamp-2">"${esc(a.last_text.slice(0,220))}"</div>` : '';
+  const toolChips = (a.tool_history||[]).map(t => `<span class="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-[10px] mono text-neutral-400">${esc(t)}</span>`).join('');
+  const finalText = a.final_text ? `<pre class="text-[11px] text-neutral-300 whitespace-pre-wrap mono bg-black/60 border border-neutral-900 rounded p-2 max-h-48 overflow-y-auto">${esc(a.final_text)}</pre>` : '<div class="text-[11px] mono text-neutral-600 italic">(no final text yet)</div>';
   const protocolRow = (a.method || a.sample_size || (a.not_checked && a.not_checked.length))
     ? `<div class="mt-2 pt-2 border-t border-neutral-900/60 space-y-1">
-         ${a.method     ? `<div class="text-[10px] mono text-neutral-500"><span class="text-neutral-600">method:</span> ${esc(a.method)}</div>` : ''}
-         ${a.sample_size? `<div class="text-[10px] mono text-neutral-500"><span class="text-neutral-600">sample:</span> ${esc(a.sample_size)}</div>` : ''}
+         ${a.method ? `<div class="text-[10px] mono text-neutral-500"><span class="text-neutral-600">method:</span> ${esc(a.method)}</div>` : ''}
+         ${a.sample_size ? `<div class="text-[10px] mono text-neutral-500"><span class="text-neutral-600">sample:</span> ${esc(a.sample_size)}</div>` : ''}
          ${(a.not_checked && a.not_checked.length) ? `<div class="text-[10px] mono text-neutral-500"><span class="text-neutral-600">not checked:</span> ${a.not_checked.map(esc).join(', ')}</div>` : ''}
-       </div>`
-    : '';
+       </div>` : '';
 
   return `
     <div class="card group border border-neutral-900 rounded-lg bg-neutral-950/60 cursor-pointer ${style.ring}${expanded}" data-id="${a.id}">
@@ -252,6 +434,7 @@ function cardHtml(a) {
         <div class="flex items-center gap-2 mb-1.5">
           <span class="chev text-crimson-500 text-[10px] mono">›</span>
           ${statusDot(a.status)}
+          ${callsignPill(a.callsign, a.model)}
           <span class="px-2 py-0.5 rounded text-[10px] mono border uppercase tracking-wider ${style.badge}">${a.model}</span>
           ${safetyPill(a.safety)}
           ${confidencePill(a.confidence)}
@@ -273,15 +456,11 @@ function cardHtml(a) {
     </div>
   `;
 }
-
-function groupHtml(g, isFirst) {
+function dashGroupHtml(g, isFirst) {
   if (FIRST_RENDER && !isFirst) SESSIONS_COLLAPSED.add(g.session);
   const collapsed = SESSIONS_COLLAPSED.has(g.session) ? ' collapsed' : '';
-  const runningBadge = g.running > 0
-    ? `<span class="px-1.5 py-0.5 rounded bg-crimson-950/60 border border-crimson-500/40 text-crimson-300 text-[10px] mono">${g.running} running</span>`
-    : '';
+  const runningBadge = g.running > 0 ? `<span class="px-1.5 py-0.5 rounded bg-crimson-950/60 border border-crimson-500/40 text-crimson-300 text-[10px] mono">${g.running} running</span>` : '';
   const label = isFirst ? 'current' : 'session';
-  const cards = g.agents.map(cardHtml).join('');
   return `
     <section class="group mb-3${collapsed}" data-session="${g.session}">
       <header class="flex items-center gap-3 px-1 py-2 cursor-pointer select-none" onclick="toggleGroup('${g.session}')">
@@ -292,28 +471,17 @@ function groupHtml(g, isFirst) {
         ${runningBadge}
         <span class="mono text-[10px] text-neutral-700 ml-auto">${fmtAge(Math.floor((Date.now()/1000) - g.mostRecent))}</span>
       </header>
-      <div class="group-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" style="max-height:${collapsed ? '0' : '99999px'};">${cards}</div>
+      <div class="group-body grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" style="max-height:${collapsed ? '0' : '99999px'};">${g.agents.map(dashCardHtml).join('')}</div>
     </section>
   `;
 }
-
-function render(agents) {
+function renderDashboard(agents) {
   const filtered = agents.filter(match);
   const sorted = sortAgents(filtered);
   const groups = groupBySession(sorted);
-
-  const container = document.getElementById('sessions');
-  const empty = document.getElementById('empty');
-  empty.classList.toggle('hidden', sorted.length > 0);
-
-  container.innerHTML = groups.map((g, i) => groupHtml(g, i === 0)).join('');
+  document.getElementById('empty-dashboard').classList.toggle('hidden', sorted.length > 0);
+  document.getElementById('sessions').innerHTML = groups.map((g, i) => dashGroupHtml(g, i === 0)).join('');
   FIRST_RENDER = false;
-
-  const running = agents.filter(a => a.status === 'running').length;
-  const done = agents.length - running;
-  const tools = agents.reduce((s,a) => s + a.tool_uses, 0);
-  document.getElementById('stats').innerHTML =
-    `<span class="text-crimson-400">${running} running</span> · ${done} done · ${tools} tool calls · ${agents.length} agents · ${groups.length} session${groups.length===1?'':'s'}`;
 }
 
 function toggleCard(id, evt) {
@@ -323,8 +491,7 @@ function toggleCard(id, evt) {
   if (el) el.classList.toggle('expanded');
 }
 function toggleGroup(session) {
-  if (SESSIONS_COLLAPSED.has(session)) SESSIONS_COLLAPSED.delete(session);
-  else SESSIONS_COLLAPSED.add(session);
+  if (SESSIONS_COLLAPSED.has(session)) SESSIONS_COLLAPSED.delete(session); else SESSIONS_COLLAPSED.add(session);
   const el = document.querySelector(`.group[data-session="${session}"]`);
   if (el) {
     el.classList.toggle('collapsed');
@@ -333,20 +500,165 @@ function toggleGroup(session) {
   }
 }
 
+// ============================================================================
+// THEATER MODE
+// ============================================================================
+function theaterLayout(n, stageEl) {
+  const rect = stageEl.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
+  const radius = Math.min(rect.width, rect.height) * 0.36;
+  const positions = [];
+  for (let i = 0; i < n; i++) {
+    const angle = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    positions.push({ x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius });
+  }
+  return { positions, cx, cy };
+}
+function renderTheater(agents) {
+  const stageEl = document.querySelector('.theater-stage');
+  const arcsEl = document.getElementById('arcs');
+  const emptyEl = document.getElementById('empty-theater');
+
+  if (!stageEl) return;
+  const rect = stageEl.getBoundingClientRect();
+  arcsEl.setAttribute('width',  rect.width);
+  arcsEl.setAttribute('height', rect.height);
+
+  const recent = agents.slice(0, 12);
+  emptyEl.classList.toggle('hidden', recent.length > 0);
+
+  const currentIds = new Set(recent.map(a => a.id));
+  for (const [id, el] of theaterCardsByAgent) {
+    if (!currentIds.has(id)) { el.remove(); theaterCardsByAgent.delete(id); }
+  }
+  for (const arc of theaterArcsByAgent.values()) arc.remove();
+  theaterArcsByAgent.clear();
+
+  const { positions, cx, cy } = theaterLayout(recent.length, stageEl);
+
+  recent.forEach((a, i) => {
+    const pos = positions[i];
+    // arc
+    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const midX = (cx + pos.x) / 2, midY = (cy + pos.y) / 2;
+    const dx = pos.x - cx, dy = pos.y - cy;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    const perpX = -dy / len * 20, perpY = dx / len * 20;
+    arc.setAttribute('d', `M ${cx} ${cy} Q ${midX + perpX} ${midY + perpY} ${pos.x} ${pos.y}`);
+    arc.setAttribute('class', `arc ${a.status}`);
+    arcsEl.appendChild(arc);
+    theaterArcsByAgent.set(a.id, arc);
+
+    // card
+    let card = theaterCardsByAgent.get(a.id);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'theater-card';
+      stageEl.appendChild(card);
+      theaterCardsByAgent.set(a.id, card);
+    }
+    card.className = `theater-card ${a.status}`;
+    card.style.left = `${pos.x - 120}px`;
+    card.style.top  = `${pos.y - 38}px`;
+
+    const style = MODEL_STYLES[a.model] || MODEL_STYLES.unknown;
+    const toolLine = a.status === 'running' && a.last_tool
+      ? `<div class="mt-1.5 text-[10px] mono" style="color:var(--crimson-hot)">→ ${esc(a.last_tool)}${a.last_tool_input ? ' · ' + esc(a.last_tool_input.slice(0, 40)) : ''}</div>`
+      : (a.final_text && a.status === 'done' ? `<div class="mt-1.5 text-[10px] mono text-neutral-500">✓ ${a.tool_uses} tools</div>` : '');
+
+    card.innerHTML = `
+      <div class="flex items-center gap-2 mb-1.5">
+        ${statusDot(a.status)}
+        ${callsignPill(a.callsign, a.model)}
+        <span class="px-2 py-0.5 rounded text-[10px] mono border uppercase tracking-wider ${style.badge}">${a.model}</span>
+        ${safetyPill(a.safety)}
+        ${confidencePill(a.confidence)}
+      </div>
+      <div class="font-semibold text-neutral-100 text-xs leading-snug mb-0.5 truncate">${esc(a.description)}</div>
+      <div class="text-[10px] text-neutral-600 mono">${esc(a.short_id)} · ${a.tool_uses} tools</div>
+      ${toolLine}
+    `;
+  });
+}
+
+// ============================================================================
+// COMPACT MODE
+// ============================================================================
+function compactRowHtml(a) {
+  const style = MODEL_STYLES[a.model] || MODEL_STYLES.unknown;
+  const tool = a.status === 'running' && a.last_tool
+    ? `<span style="color:var(--crimson-hot)">→ ${esc(a.last_tool)}</span>${a.last_tool_input ? ` <span class="text-neutral-600">· ${esc(a.last_tool_input.slice(0, 30))}</span>` : ''}`
+    : (a.final_text ? `<span class="text-neutral-500">✓ complete</span>` : '<span class="text-neutral-700">—</span>');
+  return `
+    <div class="compact-row ${a.status}" data-id="${a.id}" onclick="openModal('${a.id}')">
+      ${statusDot(a.status)}
+      ${callsignPill(a.callsign, a.model) || '<span class="text-neutral-700 text-[10px]">—</span>'}
+      <span class="px-1.5 py-0.5 rounded text-[9px] mono border uppercase text-center ${style.badge}">${a.model}</span>
+      ${safetyPill(a.safety)}
+      ${confidencePill(a.confidence) || '<span class="text-neutral-700 text-[10px]">—</span>'}
+      <span class="truncate text-neutral-100" title="${esc(a.description)}">${esc(a.description)}</span>
+      <span class="truncate">${tool}</span>
+      <span class="text-neutral-500 text-right">${a.tool_uses}</span>
+      <span class="text-neutral-500">${fmtDuration(a.elapsed_seconds)}</span>
+    </div>
+  `;
+}
+function renderCompact(agents) {
+  const filtered = agents.filter(match);
+  const sorted = sortAgents(filtered);
+  document.getElementById('empty-compact').classList.toggle('hidden', sorted.length > 0);
+  document.getElementById('compact-list').innerHTML = sorted.map(compactRowHtml).join('');
+}
+
+// ============================================================================
+// MODE SWITCHING
+// ============================================================================
+function setMode(mode) {
+  if (!['dashboard','theater','compact'].includes(mode)) mode = 'dashboard';
+  MODE = mode;
+  document.body.className = `mode-${mode}`;
+  document.querySelectorAll('.mode-panel').forEach(el => el.classList.remove('active'));
+  document.getElementById(`mode-${mode}`).classList.add('active');
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  if (location.hash !== `#${mode}`) history.replaceState(null, '', `#${mode}`);
+  renderAll();
+}
+function renderAll() {
+  updateStats();
+  if (MODE === 'dashboard') renderDashboard(LATEST);
+  else if (MODE === 'theater') renderTheater(theaterFilteredAgents());
+  else if (MODE === 'compact') renderCompact(LATEST);
+}
+function theaterFilteredAgents() {
+  if (LATEST.length === 0) return [];
+  const mostRecentSession = LATEST.reduce((a,b) => a.mtime > b.mtime ? a : b).session;
+  return LATEST.filter(a => a.session === mostRecentSession && a.mtime_age_seconds < 2 * 3600)
+               .sort((a,b) => {
+                 if (a.status !== b.status) return a.status === 'running' ? -1 : 1;
+                 return b.mtime - a.mtime;
+               })
+               .slice(0, 12);
+}
+function updateStats() {
+  const running = LATEST.filter(a => a.status === 'running').length;
+  const done = LATEST.length - running;
+  const tools = LATEST.reduce((s,a) => s + a.tool_uses, 0);
+  document.getElementById('stats').innerHTML = `<span class="text-crimson-400">${running} running</span> · ${done} done · ${tools} tool calls · ${LATEST.length} agents`;
+}
+
+// ============================================================================
+// MODAL
+// ============================================================================
 function openModal(id) {
   const a = LATEST.find(x => x.id === id);
   if (!a) return;
   const style = MODEL_STYLES[a.model] || MODEL_STYLES.unknown;
-  document.getElementById('m-status').className =
-    'w-2 h-2 rounded-full ' + (a.status === 'running' ? 'bg-crimson-500 pulse-red' : 'bg-neutral-700');
+  document.getElementById('m-status').className = 'w-2 h-2 rounded-full ' + (a.status === 'running' ? 'bg-crimson-500 pulse-red' : 'bg-neutral-700');
   document.getElementById('m-model').className = 'px-2 py-0.5 rounded text-xs mono border uppercase ' + style.badge;
   document.getElementById('m-model').textContent = a.model;
   document.getElementById('m-desc').textContent = a.description;
-  document.getElementById('m-meta').textContent =
-    `${a.short_id} · ${a.tool_uses} tools · ${a.size_kb} KB · elapsed ${fmtDuration(a.elapsed_seconds)} · last activity ${fmtAge(a.mtime_age_seconds)}`;
-  document.getElementById('m-tools').innerHTML = (a.tool_history || []).map(t =>
-    `<span class="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-[10px] mono text-neutral-400">${esc(t)}</span>`
-  ).join('');
+  document.getElementById('m-meta').innerHTML = `${callsignPill(a.callsign, a.model)} · ${a.short_id} · ${a.tool_uses} tools · ${a.size_kb} KB · elapsed ${fmtDuration(a.elapsed_seconds)} · last activity ${fmtAge(a.mtime_age_seconds)}`;
+  document.getElementById('m-tools').innerHTML = (a.tool_history || []).map(t => `<span class="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-[10px] mono text-neutral-400">${esc(t)}</span>`).join('');
   document.getElementById('m-final').textContent = a.final_text || '(no text yet)';
   document.getElementById('m-path').textContent = `model (raw): ${a.model_raw} · project: ${a.project}`;
   document.getElementById('modal').classList.remove('hidden');
@@ -357,43 +669,56 @@ function closeModal() {
   document.getElementById('modal').classList.remove('flex');
 }
 
-// Bindings
-document.getElementById('search').addEventListener('input', e => { QUERY = e.target.value.trim(); render(LATEST); });
-document.getElementById('sort').addEventListener('change',  e => { SORT = e.target.value; render(LATEST); });
-document.getElementById('filter').addEventListener('change', e => { FILTER = e.target.value; render(LATEST); });
+// ============================================================================
+// EVENT BINDINGS
+// ============================================================================
+document.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+document.getElementById('search').addEventListener('input', e => { QUERY = e.target.value.trim(); renderAll(); });
+document.getElementById('sort').addEventListener('change',  e => { SORT = e.target.value; renderAll(); });
+document.getElementById('filter').addEventListener('change', e => { FILTER = e.target.value; renderAll(); });
 document.getElementById('expand-all').addEventListener('click', () => {
   LATEST.forEach(a => EXPANDED.add(a.id));
   SESSIONS_COLLAPSED.clear();
-  render(LATEST);
+  renderAll();
 });
 document.getElementById('collapse-all').addEventListener('click', () => {
   EXPANDED.clear();
-  // collapse every session except the most recent
   const groups = groupBySession(LATEST);
   SESSIONS_COLLAPSED = new Set(groups.slice(1).map(g => g.session));
-  render(LATEST);
+  renderAll();
 });
 
-// keyboard
 document.addEventListener('keydown', e => {
+  if (document.activeElement.tagName === 'INPUT') return;
   if (e.key === 'Escape') closeModal();
-  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
-    e.preventDefault();
-    document.getElementById('search').focus();
+  if (e.key === '/') { e.preventDefault(); document.getElementById('search').focus(); }
+  if (e.key === 'd' || e.key === 'D') setMode('dashboard');
+  if (e.key === 't' || e.key === 'T') setMode('theater');
+  if (e.key === 'c' || e.key === 'C') setMode('compact');
+  if (e.key === 'f' || e.key === 'F') {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(()=>{});
   }
 });
 
-// initial fetch
-fetch('/api/agents?hours=168').then(r => r.json()).then(d => { LATEST = d.agents || []; render(LATEST); });
+window.addEventListener('resize', () => { if (MODE === 'theater') renderTheater(theaterFilteredAgents()); });
+window.addEventListener('hashchange', () => setMode(location.hash.slice(1) || 'dashboard'));
 
-// live stream
+// ============================================================================
+// BOOT
+// ============================================================================
+// Determine initial mode: URL hash > server-side initial > default
+const hashMode = location.hash.slice(1);
+setMode(hashMode || window.INITIAL_MODE || 'dashboard');
+
+fetch('/api/agents?hours=168').then(r => r.json()).then(d => { LATEST = d.agents || []; renderAll(); });
+
 const es = new EventSource('/stream');
 const live = document.getElementById('live-indicator');
 es.onopen = () => { live.textContent = 'live'; };
 es.onmessage = e => {
   try {
     const d = JSON.parse(e.data);
-    if (d.agents) { LATEST = d.agents; render(LATEST); }
+    if (d.agents) { LATEST = d.agents; renderAll(); }
   } catch (err) { console.error(err); }
 };
 es.onerror = () => { live.textContent = 'disconnected'; live.classList.add('text-red-500'); };

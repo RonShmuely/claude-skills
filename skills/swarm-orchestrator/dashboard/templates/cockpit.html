@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cockpit · Swarm Orchestrator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='13' y='7' width='6' height='18' fill='%23e10600'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --crimson:      #E10600;
+    --crimson-hot:  #FF3A30;
+    --crimson-dim:  #5A0200;
+    --crimson-deep: #2A0100;
+    --bezel:        #1a1a1a;
+    --bezel-hi:     #2a2a2a;
+    --metal:        #0e0e0e;
+    --ink:          #060606;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; margin: 0; background: var(--ink); color: #ddd; overflow: hidden;
+    font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, rgba(225,6,0,.04) 0%, transparent 40%),
+      radial-gradient(ellipse at 80% 90%, rgba(225,6,0,.03) 0%, transparent 40%),
+      linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+  }
+
+  /* Fancy hover tooltip system */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip); position: absolute;
+    top: calc(100% + 10px); left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    background: linear-gradient(180deg, #0a0a0a 0%, #060606 100%);
+    border: 1px solid var(--crimson); color: #eee;
+    padding: 9px 13px 9px 16px; border-radius: 4px;
+    font-size: 11px; line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.02em;
+    white-space: normal; max-width: 320px; width: max-content;
+    z-index: 9999; pointer-events: none;
+    opacity: 0; visibility: hidden;
+    transition: opacity .15s ease, transform .15s ease;
+    box-shadow: 0 0 24px rgba(225,6,0,.35), 0 6px 20px rgba(0,0,0,.6);
+    background-image: linear-gradient(90deg, var(--crimson) 0 2px, transparent 2px 100%);
+  }
+  [data-tip]::before {
+    content: ''; position: absolute;
+    top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-bottom-color: var(--crimson);
+    z-index: 9999; pointer-events: none;
+    opacity: 0; visibility: hidden; transition: opacity .15s ease;
+  }
+  [data-tip]:hover::after, [data-tip]:hover::before {
+    opacity: 1; visibility: visible;
+    transform: translateX(-50%) translateY(0);
+    transition-delay: .25s;
+  }
+  [data-tip-pos="top"]::after {
+    top: auto; bottom: calc(100% + 10px);
+    transform: translateX(-50%) translateY(4px);
+  }
+  [data-tip-pos="top"]::before {
+    top: auto; bottom: calc(100% + 4px);
+    border-bottom-color: transparent; border-top-color: var(--crimson);
+  }
+  [data-tip-pos="top"]:hover::after { transform: translateX(-50%) translateY(0); }
+
+  /* Grid */
+  .cockpit {
+    display: grid; height: 100vh; padding: 20px; gap: 14px;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 240px 1fr 130px;
+    grid-template-areas:
+      "tasks roster stats"
+      "balance ticker ticker"
+      "strip strip strip";
+  }
+
+  /* Panel chrome */
+  .panel {
+    background: linear-gradient(180deg, var(--bezel) 0%, var(--metal) 100%);
+    border: 1px solid var(--bezel-hi);
+    border-radius: 10px; position: relative;
+    box-shadow: inset 0 0 1px rgba(255,255,255,.06), inset 0 0 40px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .panel-label {
+    position: absolute; top: 8px; left: 12px;
+    font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: #666; font-weight: 700;
+  }
+  .panel-sub {
+    position: absolute; top: 8px; right: 12px;
+    font-size: 9px; color: var(--crimson-hot); letter-spacing: 0.2em;
+  }
+
+  .tasks-panel { grid-area: tasks; }
+  .roster-panel { grid-area: roster; }
+  .stats-panel { grid-area: stats; }
+  .balance-panel { grid-area: balance; }
+  .ticker-panel { grid-area: ticker; }
+  .strip-panel { grid-area: strip; }
+
+  /* Top-bar */
+  .topbar { position: absolute; top: 6px; left: 20px; right: 20px; display: flex; align-items: center; justify-content: space-between; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; z-index: 10; pointer-events: none; }
+  .topbar .l { color: var(--crimson-hot); text-shadow: 0 0 6px rgba(225,6,0,.6); }
+  .topbar .r { color: #555; }
+
+  /* Stats grid */
+  .stats-grid {
+    position: absolute; inset: 30px 10px 10px 10px;
+    display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 4px;
+  }
+  .stat {
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 5px;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 4px 10px; position: relative;
+    transition: border-color .2s;
+  }
+  .stat:hover { border-color: var(--crimson-deep); }
+  .stat-v { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: #fff; line-height: 1; text-shadow: 0 0 12px rgba(225,6,0,.35); }
+  .stat-v .hot { color: var(--crimson); }
+  .stat-v .stat-s { font-size: 16px; color: #888; margin-left: 2px; }
+  .stat-l { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #666; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+  /* Tasks panel */
+  .tasks-inside, .roster-inside { position: absolute; inset: 30px 12px 12px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .roster-inside { gap: 1px; }
+  .task-row { background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 5px; padding: 5px 8px; transition: border-color .15s; }
+  .task-row:hover { border-color: #2a2a2a; }
+  .task-row.running { border-color: var(--crimson); box-shadow: 0 0 12px rgba(225,6,0,.2); }
+  .task-head { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; font-size: 10px; cursor: pointer; }
+  .task-chev { color: var(--crimson-hot); font-size: 9px; transition: transform .2s; width: 8px; }
+  .task-row.expanded .task-chev { transform: rotate(90deg); }
+  .task-dot { width: 7px; height: 7px; border-radius: 50%; background: #444; flex-shrink: 0; }
+  .task-row.running .task-dot { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1.1s infinite; }
+  .task-name { font-size: 11px; color: #fff; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .task-pill { font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 1px 5px; border-radius: 2px; background: #161616; border: 1px solid #222; color: #999; }
+  .task-pill.done { color: #80e0a0; border-color: #205040; }
+  .task-pill.err  { color: var(--crimson-hot); border-color: var(--crimson-dim); }
+  .task-agents { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+  .task-row.expanded .task-agents { max-height: 400px; margin-top: 6px; }
+  .cs-strip { display: flex; flex-wrap: wrap; gap: 3px; padding: 0 0 0 14px; }
+  .task-safety { font-size: 8px; font-weight: 800; text-align: center; padding: 1px 5px; border-radius: 2px; border: 1px solid; }
+  .task-safety.low { color: #999; border-color: #333; }
+  .task-safety.medium { color: #ffc870; border-color: #906000; }
+  .task-safety.high { color: var(--crimson-hot); border-color: var(--crimson); }
+
+  /* Roster panel */
+  .roster-row { display: grid; grid-template-columns: 8px 90px 18px 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 10px; transition: background .12s; }
+  .roster-row:hover { background: rgba(255,255,255,.02); }
+  .rdot { width: 6px; height: 6px; border-radius: 50%; background: #444; }
+  .roster-row.running .rdot { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1.1s infinite; }
+  .roster-row.done .rdot { background: #80e0a0; }
+  .roster-row.idle .rdot { background: #555; }
+  .rsfty { font-size: 8px; font-weight: 800; text-align: center; padding: 1px 4px; border-radius: 2px; border: 1px solid; }
+  .rsfty.L { color: #999; border-color: #333; }
+  .rsfty.M { color: #ffc870; border-color: #906000; }
+  .rsfty.H { color: var(--crimson-hot); border-color: var(--crimson); }
+  .rdesc { color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: -apple-system, sans-serif; font-size: 11px; }
+  .rtool { color: var(--crimson-hot); justify-self: end; font-size: 10px; animation: pulse-op 1.4s ease-in-out infinite; }
+  .rstat { color: #666; justify-self: end; font-size: 10px; }
+  .roster-row.running .rstat { color: var(--crimson-hot); }
+  @keyframes pulse-op { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+  /* Callsigns */
+  .callsign {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 18px; padding: 0 7px; border-radius: 3px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    font-family: 'JetBrains Mono', monospace; border: 1px solid;
+    color: #fff; white-space: nowrap;
+  }
+  .callsign.sm { height: 16px; font-size: 9px; padding: 0 5px; }
+  .callsign.opus   { background: rgba(200,90,168,.3); border-color: #d080c0; }
+  .callsign.sonnet { background: rgba(90,136,208,.3); border-color: #80a0e0; }
+  .callsign.haiku  { background: rgba(90,176,136,.3); border-color: #80c0a0; }
+  .callsign.agent  { background: rgba(130,130,130,.3); border-color: #888; }
+  .callsign.reviewer { background: var(--crimson); border-color: var(--crimson-hot); box-shadow: 0 0 10px rgba(225,6,0,.6); }
+
+  /* Balance — stacked bars */
+  .att-core { position: absolute; inset: 30px 16px 14px 16px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+  .stack-block { display: flex; flex-direction: column; gap: 4px; }
+  .stack-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .meter-label { color: #888; letter-spacing: 0.18em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; }
+  .stack-total { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #ddd; font-weight: 600; }
+  .att-stack { display: flex; height: 14px; border-radius: 3px; overflow: hidden; border: 1px solid #222; }
+  .stack-opus   { background: rgba(160,60,140,.75); }
+  .stack-sonnet { background: rgba(60,120,200,.75); }
+  .stack-haiku  { background: rgba(60,160,120,.75); }
+  .stack-L      { background: rgba(100,100,100,.55); }
+  .stack-M      { background: rgba(200,140,40,.70); }
+  .stack-H      { background: rgba(225,6,0,.75); }
+  .stack-legend { display: flex; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #888; }
+  .stack-legend span::before { content: '■ '; }
+  .stack-legend .opus::before   { color: #d080c0; }
+  .stack-legend .sonnet::before { color: #80a0e0; }
+  .stack-legend .haiku::before  { color: #80c0a0; }
+  .stack-legend .low::before    { color: #888; }
+  .stack-legend .medium::before { color: #ffc870; }
+  .stack-legend .high::before   { color: var(--crimson-hot); }
+
+  /* Ticker */
+  .tape { position: absolute; inset: 28px 16px 16px 16px; overflow: hidden; background: #000; border-radius: 6px; border: 1px solid #1a1a1a; padding: 8px 10px; font-size: 11px; line-height: 1.7; }
+  .tape-line { white-space: nowrap; color: #aaa; }
+  .tape-line .ts { color: #555; margin-right: 10px; }
+  .tape-line .tag { display: inline-block; padding: 0 5px; border-radius: 2px; font-size: 9px; letter-spacing: 0.05em; margin-right: 6px; font-family: 'JetBrains Mono', monospace; }
+  .tape-line .tag.opus   { color: #ffa6e5; background: rgba(160,60,140,.25); }
+  .tape-line .tag.sonnet { color: #a0c8ff; background: rgba(60,120,200,.25); }
+  .tape-line .tag.haiku  { color: #a0e5c0; background: rgba(60,160,120,.25); }
+  .tape-line .tag.reviewer { color: #fff; background: var(--crimson); }
+  .tape-line .tool { color: var(--crimson-hot); }
+  .tape-line .arg  { color: #888; }
+  .tape-line.pulse { animation: tape-in .3s ease; }
+  @keyframes tape-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* Pilot lights */
+  .strip-inner { position: absolute; inset: 24px 14px 14px 14px; display: flex; gap: 8px; align-items: stretch; }
+  .lamp { flex: 1 1 0; min-width: 0; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
+  .lamp.running { border-color: var(--crimson); box-shadow: 0 0 18px rgba(225,6,0,.4); }
+  .lamp.done { border-color: rgba(225,6,0,.3); }
+  .lamp-top { display: flex; align-items: center; gap: 6px; }
+  .lamp .dot { width: 6px; height: 6px; border-radius: 50%; background: #333; }
+  .lamp.running .dot { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1s infinite; }
+  .lamp .desc { font-size: 10px; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-family: -apple-system, sans-serif; }
+  .lamp .stat-line { font-size: 9px; color: #666; margin-top: auto; font-family: 'JetBrains Mono', monospace; }
+  .lamp .conf { position: absolute; top: 6px; right: 8px; font-size: 9px; color: #80e0a0; font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+  .lamp.low-conf .conf { color: var(--crimson-hot); }
+  @keyframes dot-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.5); } }
+
+  /* Empty state */
+  .empty { text-align: center; color: #555; font-size: 10px; padding: 20px; letter-spacing: 0.15em; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #262626; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #404040; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="l">▮ COCKPIT · SWARM OPS</span>
+  <span class="r">swarm-orchestrator · live</span>
+</div>
+
+<div class="cockpit">
+
+  <section class="panel tasks-panel" data-tip="Tasks grouped by dispatch-time proximity. Agents dispatched within ~60s are one task. Click to expand.">
+    <div class="panel-label">tasks</div>
+    <div class="panel-sub" id="tasks-sub">—</div>
+    <div class="tasks-inside" id="tasks-inside"></div>
+  </section>
+
+  <section class="panel roster-panel" data-tip="Live flat list of every agent in the current session: callsign, safety, description, current tool or final status.">
+    <div class="panel-label">agent roster</div>
+    <div class="panel-sub" id="roster-sub">—</div>
+    <div class="roster-inside" id="roster-inside"></div>
+  </section>
+
+  <section class="panel stats-panel">
+    <div class="panel-label">session stats</div>
+    <div class="panel-sub">live</div>
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat" data-tip="Mean of confidence scores emitted by muscles' META blocks. Higher = protocol trusted the output more.">
+        <div class="stat-v" id="st-conf">—</div>
+        <div class="stat-l">avg confidence</div>
+      </div>
+      <div class="stat" data-tip="Estimated session cost across all agents, based on per-tier Anthropic pricing.">
+        <div class="stat-v" id="st-spend">—</div>
+        <div class="stat-l">spend (session)</div>
+      </div>
+      <div class="stat" data-tip="Agents currently running vs total in session.">
+        <div class="stat-v" id="st-running"><span class="hot">—</span></div>
+        <div class="stat-l">running / total</div>
+      </div>
+      <div class="stat" data-tip="Speedup from parallelism. Sum of all agents' elapsed time ÷ wall-clock time. 1× = sequential; higher = more parallel work.">
+        <div class="stat-v" id="st-parallel">—<span class="stat-s">×</span></div>
+        <div class="stat-l">parallel factor</div>
+      </div>
+      <div class="stat" data-tip="Total tool invocations across all agents this session.">
+        <div class="stat-v" id="st-tools">—</div>
+        <div class="stat-l">tool calls</div>
+      </div>
+      <div class="stat" data-tip="Count of low-confidence muscles (&lt; 0.7) that got auto-re-dispatched to a stronger tier. Many here = you're under-tiering.">
+        <div class="stat-v" id="st-esc">—</div>
+        <div class="stat-l">escalations</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel balance-panel" data-tip-pos="top" data-tip="Three snapshots of the swarm: by tier count (who's on the field), by spend (where the money went), by safety level (stakes mix).">
+    <div class="panel-label">swarm balance</div>
+    <div class="panel-sub">distributions</div>
+    <div class="att-core" id="balance-core"></div>
+  </section>
+
+  <section class="panel ticker-panel" data-tip-pos="top" data-tip="Rolling tool-call activity. Last ~15 tool invocations across the swarm.">
+    <div class="panel-label">tool-call tape</div>
+    <div class="panel-sub">rolling · last 15</div>
+    <div class="tape" id="tape"></div>
+  </section>
+
+  <section class="panel strip-panel" data-tip-pos="top" data-tip="Glanceable card view of active agents. Crimson = running, dim = done.">
+    <div class="panel-label">active agents · pilot lights</div>
+    <div class="panel-sub" id="strip-sub">—</div>
+    <div class="strip-inner" id="strip-inner"></div>
+  </section>
+
+</div>
+
+<script>
+// ============================================================================
+// Model pricing (approx per-1M tokens) for spend estimate
+// ============================================================================
+const PRICE = {
+  opus:   { in: 15,  out: 75  },
+  sonnet: { in: 3,   out: 15  },
+  haiku:  { in: 1,   out: 5   },
+};
+
+function esc(s) {
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtDur(s) {
+  if (s == null) return '—';
+  if (s < 60) return s.toFixed(0) + 's';
+  const m = Math.floor(s / 60), r = Math.round(s % 60);
+  return `${m}m${r ? ' ' + r + 's' : ''}`;
+}
+
+let LATEST = [];
+let EXPANDED_TASKS = new Set();
+let TAPE_SEEN = new Set();     // agent_id|tool signatures already shown
+
+function mostRecentSession(agents) {
+  if (!agents.length) return null;
+  return agents.reduce((a,b) => a.mtime > b.mtime ? a : b).session;
+}
+
+function modelClass(m) {
+  return ['opus','sonnet','haiku','agent'].includes(m) ? m : 'agent';
+}
+
+// ============================================================================
+// TASKS
+// ============================================================================
+function renderTasks(sessionAgents) {
+  // group by task_id, preserve order of earliest task
+  const byTask = new Map();
+  for (const a of sessionAgents) {
+    const tid = a.task_id || 'untasked';
+    if (!byTask.has(tid)) byTask.set(tid, []);
+    byTask.get(tid).push(a);
+  }
+  // sort tasks: running first, then by most recent activity
+  const tasks = [...byTask.entries()].map(([tid, agents]) => {
+    const running = agents.some(a => a.status === 'running');
+    const mostRecent = Math.max(...agents.map(a => a.mtime));
+    return { tid, agents, running, mostRecent };
+  });
+  tasks.sort((a,b) => {
+    if (a.running !== b.running) return a.running ? -1 : 1;
+    return b.mostRecent - a.mostRecent;
+  });
+
+  document.getElementById('tasks-sub').textContent =
+    `${tasks.length} · ${sessionAgents.length} agent${sessionAgents.length===1?'':'s'}`;
+
+  const inside = document.getElementById('tasks-inside');
+  if (tasks.length === 0) {
+    inside.innerHTML = '<div class="empty">no tasks · dispatch something</div>';
+    return;
+  }
+
+  // default: expand only the running task (or the most recent if none running)
+  if (EXPANDED_TASKS.size === 0 && tasks.length > 0) {
+    EXPANDED_TASKS.add(tasks[0].tid);
+  }
+
+  inside.innerHTML = tasks.map(t => {
+    const first = t.agents[0];
+    const sz = first.task_size || t.agents.length;
+    const done = t.agents.filter(a => a.status !== 'running').length;
+    const wallSec = first.task_wall_seconds || 0;
+    const safety = first.task_safety || 'low';
+    const safetyL = safety === 'high' ? 'H' : safety === 'medium' ? 'M' : 'L';
+    const cost = t.agents.reduce((s,a) => s + estimateAgentCost(a), 0);
+    const expanded = EXPANDED_TASKS.has(t.tid);
+
+    const callsigns = t.agents
+      .slice()
+      .sort((a,b) => (a.mtime - (a.elapsed_seconds||0)) - (b.mtime - (b.elapsed_seconds||0)))
+      .map(a => {
+        const cs = a.callsign || '?';
+        const cls = cs.startsWith('R·') ? 'reviewer' : modelClass(a.model);
+        const conf = a.confidence != null ? ` · ${Math.round(a.confidence*100)}%` : '';
+        return `<span class="callsign sm ${cls}" data-tip="${esc(a.description)}${esc(conf)}">${esc(cs)}</span>`;
+      }).join('');
+
+    return `
+      <div class="task-row ${t.running ? 'running' : ''} ${expanded ? 'expanded' : ''}" data-tid="${esc(t.tid)}">
+        <div class="task-head" onclick="toggleTask('${esc(t.tid)}')">
+          <span class="task-chev">›</span>
+          <div class="task-dot"></div>
+          <span class="task-name">${esc(first.task_name || 'Task')}</span>
+          <span class="task-safety ${safety}">${safetyL}</span>
+          <span class="task-pill ${t.running ? '' : 'done'}">${done}/${sz}</span>
+          <span class="task-pill" data-tip-pos="top" data-tip="Wall-clock time of this task">${fmtDur(wallSec)}</span>
+          <span class="task-pill" style="color:#ddd;font-weight:600">$${cost.toFixed(2)}</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">${callsigns}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+function toggleTask(tid) {
+  if (EXPANDED_TASKS.has(tid)) EXPANDED_TASKS.delete(tid);
+  else EXPANDED_TASKS.add(tid);
+  render(LATEST);
+}
+
+// ============================================================================
+// ROSTER
+// ============================================================================
+function renderRoster(sessionAgents) {
+  // order: running first, then by most recent
+  const sorted = sessionAgents.slice().sort((a,b) => {
+    if (a.status !== b.status) return a.status === 'running' ? -1 : 1;
+    return b.mtime - a.mtime;
+  });
+  document.getElementById('roster-sub').textContent =
+    `${sorted.filter(a => a.status === 'running').length} running · ${sorted.length} total`;
+
+  const inside = document.getElementById('roster-inside');
+  if (sorted.length === 0) {
+    inside.innerHTML = '<div class="empty">empty roster</div>';
+    return;
+  }
+  inside.innerHTML = sorted.slice(0, 24).map(a => {
+    const cs = a.callsign || '?';
+    const csCls = cs.startsWith('R·') ? 'reviewer' : modelClass(a.model);
+    const sfty = a.safety === 'high' ? 'H' : a.safety === 'medium' ? 'M' : 'L';
+    const running = a.status === 'running';
+    const right = running && a.last_tool
+      ? `<span class="rtool">→ ${esc(a.last_tool)}</span>`
+      : `<span class="rstat">${a.confidence != null ? '✓ ' + Math.round(a.confidence*100)+'%' : '✓'} · ${a.tool_uses} tools · ${fmtDur(a.elapsed_seconds)}</span>`;
+    return `
+      <div class="roster-row ${running ? 'running' : 'done'}">
+        <div class="rdot"></div>
+        <span class="callsign sm ${csCls}">${esc(cs)}</span>
+        <span class="rsfty ${sfty}">${sfty}</span>
+        <span class="rdesc">${esc(a.description)}</span>
+        ${right}
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================================
+// STATS
+// ============================================================================
+function estimateAgentCost(a) {
+  const price = PRICE[a.model] || { in: 3, out: 15 };
+  // crude estimate: assume average 50k input, 5k output per agent × 0.5 compute factor
+  // use reported size as a weak proxy where it's available
+  const toolFactor = Math.min(1.5, 0.5 + (a.tool_uses || 0) / 40);
+  const inputTokens = 40000 * toolFactor;
+  const outputTokens = 4000 * toolFactor;
+  return (inputTokens * price.in + outputTokens * price.out) / 1_000_000;
+}
+
+function renderStats(sessionAgents) {
+  const running = sessionAgents.filter(a => a.status === 'running').length;
+  const total = sessionAgents.length;
+  const tools = sessionAgents.reduce((s,a) => s + (a.tool_uses || 0), 0);
+
+  const confs = sessionAgents.map(a => a.confidence).filter(c => c != null);
+  const avgConf = confs.length ? confs.reduce((s,c) => s + c, 0) / confs.length : null;
+
+  const escalations = sessionAgents.filter(a => a.confidence != null && a.confidence < 0.7).length;
+
+  const sumElapsed = sessionAgents.reduce((s,a) => s + (a.elapsed_seconds || 0), 0);
+  // wall = max mtime - min start-time approx
+  const starts = sessionAgents.map(a => a.mtime - (a.elapsed_seconds || 0));
+  const wall = sessionAgents.length ? Math.max(...sessionAgents.map(a => a.mtime)) - Math.min(...starts) : 0;
+  const parallel = wall > 0 ? sumElapsed / wall : 0;
+
+  const spend = sessionAgents.reduce((s,a) => s + estimateAgentCost(a), 0);
+
+  document.getElementById('st-conf').textContent = avgConf != null ? avgConf.toFixed(2) : '—';
+  document.getElementById('st-spend').textContent = '$' + spend.toFixed(2);
+  document.getElementById('st-running').innerHTML = `<span class="hot">${running}</span>/${total}`;
+  document.getElementById('st-parallel').innerHTML = (parallel > 0 ? parallel.toFixed(1) : '—') + '<span class="stat-s">×</span>';
+  document.getElementById('st-tools').textContent = tools;
+  document.getElementById('st-esc').textContent = escalations;
+}
+
+// ============================================================================
+// SWARM BALANCE
+// ============================================================================
+function renderBalance(sessionAgents) {
+  const core = document.getElementById('balance-core');
+  if (sessionAgents.length === 0) {
+    core.innerHTML = '<div class="empty">no agents yet</div>';
+    return;
+  }
+  // tier count
+  const tc = { opus:0, sonnet:0, haiku:0, agent:0 };
+  const ts = { opus:0, sonnet:0, haiku:0, agent:0 };
+  const sf = { low:0, medium:0, high:0 };
+  for (const a of sessionAgents) {
+    const m = modelClass(a.model);
+    tc[m]++;
+    ts[m] += estimateAgentCost(a);
+    sf[a.safety || 'low']++;
+  }
+  const tcSum = tc.opus + tc.sonnet + tc.haiku + tc.agent;
+  const tsSum = ts.opus + ts.sonnet + ts.haiku + ts.agent;
+  const sfSum = sf.low + sf.medium + sf.high;
+  const pctTS = (v) => tsSum > 0 ? (v / tsSum * 100).toFixed(0) : '0';
+
+  core.innerHTML = `
+    <div class="stack-block" data-tip-pos="top" data-tip="Count of agents by tier. Shows who's on the field.">
+      <div class="stack-hdr"><span class="meter-label">by tier · count</span><span class="stack-total">${tcSum} agent${tcSum===1?'':'s'}</span></div>
+      <div class="att-stack">
+        <div class="stack-opus"   style="flex: ${Math.max(tc.opus, 0.001)};"></div>
+        <div class="stack-sonnet" style="flex: ${Math.max(tc.sonnet, 0.001)};"></div>
+        <div class="stack-haiku"  style="flex: ${Math.max(tc.haiku, 0.001)};"></div>
+      </div>
+      <div class="stack-legend">
+        <span class="opus">opus ${tc.opus}</span>
+        <span class="sonnet">sonnet ${tc.sonnet}</span>
+        <span class="haiku">haiku ${tc.haiku}</span>
+      </div>
+    </div>
+    <div class="stack-block" data-tip-pos="top" data-tip="Share of spend by tier. Opus is ~15× haiku per-token, so a small Opus slice can dominate.">
+      <div class="stack-hdr"><span class="meter-label">by tier · spend</span><span class="stack-total">$${tsSum.toFixed(2)}</span></div>
+      <div class="att-stack">
+        <div class="stack-opus"   style="flex: ${Math.max(ts.opus, 0.001)};"></div>
+        <div class="stack-sonnet" style="flex: ${Math.max(ts.sonnet, 0.001)};"></div>
+        <div class="stack-haiku"  style="flex: ${Math.max(ts.haiku, 0.001)};"></div>
+      </div>
+      <div class="stack-legend">
+        <span class="opus">opus ${pctTS(ts.opus)}%</span>
+        <span class="sonnet">sonnet ${pctTS(ts.sonnet)}%</span>
+        <span class="haiku">haiku ${pctTS(ts.haiku)}%</span>
+      </div>
+    </div>
+    <div class="stack-block" data-tip-pos="top" data-tip="Distribution of safety tags [L]/[M]/[H]. More [H] means higher stakes + more mitigations firing.">
+      <div class="stack-hdr"><span class="meter-label">by safety</span><span class="stack-total">${sfSum} agent${sfSum===1?'':'s'}</span></div>
+      <div class="att-stack">
+        <div class="stack-L" style="flex: ${Math.max(sf.low, 0.001)};"></div>
+        <div class="stack-M" style="flex: ${Math.max(sf.medium, 0.001)};"></div>
+        <div class="stack-H" style="flex: ${Math.max(sf.high, 0.001)};"></div>
+      </div>
+      <div class="stack-legend">
+        <span class="low">[L] ${sf.low}</span>
+        <span class="medium">[M] ${sf.medium}</span>
+        <span class="high">[H] ${sf.high}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================================
+// PILOT LIGHTS (bottom strip)
+// ============================================================================
+function renderStrip(sessionAgents) {
+  const sorted = sessionAgents.slice().sort((a,b) => {
+    if (a.status !== b.status) return a.status === 'running' ? -1 : 1;
+    return b.mtime - a.mtime;
+  }).slice(0, 8);
+  document.getElementById('strip-sub').textContent =
+    `${sorted.filter(a=>a.status==='running').length} of ${sorted.length}`;
+
+  const strip = document.getElementById('strip-inner');
+  if (sorted.length === 0) {
+    strip.innerHTML = '<div class="empty" style="flex:1">no active agents</div>';
+    return;
+  }
+  strip.innerHTML = sorted.map(a => {
+    const cs = a.callsign || '?';
+    const csCls = cs.startsWith('R·') ? 'reviewer' : modelClass(a.model);
+    const running = a.status === 'running';
+    const conf = a.confidence != null
+      ? `<div class="conf">${Math.round(a.confidence*100)}%</div>` : '';
+    return `
+      <div class="lamp ${running ? 'running' : 'done'}" data-tip="${esc(a.description)}">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign sm ${csCls}">${esc(cs)}</span></div>
+        <div class="desc">${esc(a.description)}</div>
+        <div class="stat-line">${a.tool_uses} tools · ${fmtDur(a.elapsed_seconds)}</div>
+        ${conf}
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================================
+// TICKER (tool-call tape)
+// ============================================================================
+function updateTape(sessionAgents) {
+  const tape = document.getElementById('tape');
+  // Derive lines: most recent tool_history entry per agent, newest first
+  const events = [];
+  for (const a of sessionAgents) {
+    const tools = a.tool_history || [];
+    if (!tools.length) continue;
+    const last = tools[tools.length - 1];
+    const sig = `${a.id}|${tools.length}|${last}`;
+    if (TAPE_SEEN.has(sig)) continue;
+    TAPE_SEEN.add(sig);
+    events.push({ agent: a, tool: last, sig });
+  }
+  if (events.length === 0) return;
+  events.sort((x,y) => x.agent.mtime - y.agent.mtime);
+  for (const ev of events) {
+    const now = new Date();
+    const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    const cs = ev.agent.callsign || '?';
+    const csCls = cs.startsWith('R·') ? 'reviewer' : modelClass(ev.agent.model);
+    const arg = ev.agent.last_tool_input ? esc(ev.agent.last_tool_input.slice(0, 48)) : '';
+    const line = document.createElement('div');
+    line.className = 'tape-line pulse';
+    line.innerHTML = `<span class="ts">${ts}</span><span class="tag ${csCls}">${esc(cs)}</span><span class="tool">${esc(ev.tool)}</span>  <span class="arg">${arg}</span>`;
+    tape.prepend(line);
+  }
+  while (tape.children.length > 15) tape.lastChild.remove();
+}
+
+// ============================================================================
+// MAIN RENDER + LIVE STREAM
+// ============================================================================
+function render(agents) {
+  LATEST = agents;
+  const session = mostRecentSession(agents);
+  const sessionAgents = session ? agents.filter(a => a.session === session) : [];
+  renderTasks(sessionAgents);
+  renderRoster(sessionAgents);
+  renderStats(sessionAgents);
+  renderBalance(sessionAgents);
+  renderStrip(sessionAgents);
+  updateTape(sessionAgents);
+}
+
+fetch('/api/agents?hours=24').then(r => r.json()).then(d => render(d.agents || []));
+
+const es = new EventSource('/stream');
+es.onmessage = e => {
+  try {
+    const d = JSON.parse(e.data);
+    if (d.agents) render(d.agents);
+  } catch (err) { console.error(err); }
+};
+</script>
+</body>
+</html>
