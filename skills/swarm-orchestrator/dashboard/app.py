@@ -260,6 +260,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/theater")
+def theater():
+    return render_template("theater.html")
+
+
 @app.route("/api/agents")
 def api_agents():
     hours = float(request_arg("hours", "24"))

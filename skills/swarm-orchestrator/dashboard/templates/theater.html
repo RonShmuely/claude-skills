@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Theater — Swarm Orchestrator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='13' y='7' width='6' height='18' fill='%23e10600'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --crimson:      #E10600;
+    --crimson-hot:  #FF3A30;
+    --crimson-dim:  #5A0200;
+    --crimson-deep: #2A0100;
+    --black:        #000000;
+    --ink:          #0A0A0A;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; width: 100%; margin: 0; padding: 0;
+    background: var(--black);
+    color: #fff;
+    font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif;
+    overflow: hidden;
+    cursor: none;
+  }
+  body:hover { cursor: default; }
+  .mono { font-family: 'JetBrains Mono', 'Geist Mono', 'IBM Plex Mono', ui-monospace, monospace; }
+
+  /* Stage */
+  #stage {
+    position: fixed; inset: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+
+  /* Vignette + radial background */
+  #stage::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at center, rgba(225,6,0,0.06) 0%, rgba(225,6,0,0) 55%),
+      radial-gradient(ellipse at center, #050505 0%, #000 85%);
+    pointer-events: none;
+  }
+
+  /* Central brain — SVG, pulsing */
+  .brain-wrap {
+    position: relative;
+    width: 360px; height: 360px;
+    display: grid; place-items: center;
+    z-index: 3;
+  }
+  .brain-wrap::after {
+    /* phosphor halo */
+    content: '';
+    position: absolute; inset: -60px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(225,6,0,0.35) 0%, rgba(225,6,0,0) 60%);
+    animation: halo-pulse 2.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes halo-pulse {
+    0%,100% { opacity: .5; transform: scale(1); }
+    50%     { opacity: 1;  transform: scale(1.06); }
+  }
+
+  .brain-svg { width: 280px; height: 280px; filter: drop-shadow(0 0 16px rgba(225,6,0,.55)); }
+  .brain-svg path, .brain-svg circle { stroke: var(--crimson); fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+  .brain-svg .glow { stroke: var(--crimson-hot); stroke-width: 1.8; opacity: .9; }
+  .brain-pulse { transform-origin: center; animation: brain-breathe 3.4s ease-in-out infinite; }
+  @keyframes brain-breathe {
+    0%,100% { transform: scale(1); filter: drop-shadow(0 0 12px rgba(225,6,0,.55)); }
+    50%     { transform: scale(1.04); filter: drop-shadow(0 0 28px rgba(225,6,0,.85)); }
+  }
+
+  /* Brain label */
+  .brain-label {
+    position: absolute;
+    bottom: -20px; left: 50%; transform: translateX(-50%);
+    text-align: center;
+    white-space: nowrap;
+    letter-spacing: 0.24em;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--crimson-hot);
+    text-shadow: 0 0 10px rgba(225,6,0,.9);
+  }
+  .brain-label .big {
+    display: block;
+    font-size: 14px;
+    letter-spacing: 0.35em;
+    font-weight: 700;
+  }
+  .brain-label .sub {
+    display: block;
+    margin-top: 4px;
+    color: #bbb;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+  }
+
+  /* Arcs + cards are SVG-positioned relative to stage center */
+  #arcs {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .arc {
+    fill: none;
+    stroke: var(--crimson-dim);
+    stroke-width: 1;
+    stroke-dasharray: 4 6;
+    opacity: .7;
+  }
+  .arc.running {
+    stroke: var(--crimson);
+    stroke-dasharray: 4 4;
+    animation: dash-run 1.6s linear infinite;
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(225,6,0,.7));
+  }
+  @keyframes dash-run {
+    to { stroke-dashoffset: -100; }
+  }
+  .arc.done {
+    stroke: var(--crimson);
+    stroke-dasharray: 0;
+    stroke-width: 1.5;
+    opacity: .9;
+  }
+
+  /* Cards positioned absolutely, one per agent */
+  .card {
+    position: absolute;
+    width: 240px;
+    background: rgba(10,10,10,0.92);
+    border: 1px solid var(--crimson-deep);
+    border-radius: 10px;
+    padding: 10px 12px;
+    backdrop-filter: blur(6px);
+    z-index: 4;
+    opacity: 0;
+    transform: scale(0.85);
+    animation: card-enter .45s cubic-bezier(.2,.8,.3,1.2) forwards;
+    transform-origin: center;
+  }
+  .card.running { border-color: var(--crimson); box-shadow: 0 0 24px rgba(225,6,0,.35); }
+  .card.done    { border-color: rgba(225,6,0,.4); }
+  @keyframes card-enter {
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .card .head {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.running { background: var(--crimson); box-shadow: 0 0 10px rgba(225,6,0,.9); animation: dot-pulse 1.1s ease-in-out infinite; }
+  .dot.done    { background: #444; }
+  @keyframes dot-pulse {
+    0%,100% { transform: scale(1); opacity: 1; }
+    50%     { transform: scale(1.5); opacity: .4; }
+  }
+  .tag {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .tag.opus    { color: #ffa6e5; border-color: #c050a0; background: rgba(120,40,90,.2); }
+  .tag.sonnet  { color: #a0c8ff; border-color: #5080c0; background: rgba(40,70,120,.2); }
+  .tag.haiku   { color: #a0e5c0; border-color: #50a080; background: rgba(40,100,70,.2); }
+  .tag.unknown { color: #999;    border-color: #333;   background: rgba(30,30,30,.2); }
+  .safety {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--crimson-deep);
+    color: var(--crimson-hot);
+    margin-left: auto;
+  }
+  .safety.M { border-color: #906000; color: #ffc870; }
+  .safety.L { border-color: #333; color: #999; }
+  .conf {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    border: 1px solid;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .conf.good { color: #a0ffc0; border-color: #208050; }
+  .conf.meh  { color: #ffc870; border-color: #906020; }
+  .conf.bad  { color: var(--crimson-hot); border-color: var(--crimson); }
+
+  .card .desc {
+    font-size: 12px;
+    line-height: 1.3;
+    color: #eee;
+    font-weight: 600;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card .meta {
+    font-size: 10px;
+    color: #666;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .card .tool {
+    margin-top: 6px;
+    font-size: 10px;
+    color: var(--crimson-hot);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* HUD corners */
+  .hud {
+    position: fixed;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--crimson-hot);
+    z-index: 5;
+    text-shadow: 0 0 6px rgba(225,6,0,.6);
+  }
+  .hud.tl { top: 16px; left: 20px; }
+  .hud.tr { top: 16px; right: 20px; }
+  .hud.bl { bottom: 16px; left: 20px; color: #555; }
+  .hud.br { bottom: 16px; right: 20px; color: #555; }
+  .hud .bar { color: #666; }
+
+  /* Empty state */
+  #empty {
+    position: absolute;
+    bottom: 60px; left: 50%; transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #666;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <svg id="arcs"></svg>
+
+  <div class="brain-wrap">
+    <svg class="brain-svg brain-pulse" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+      <!-- outer brain outline (simplified) -->
+      <path d="M 100 20
+               C 70 20, 42 38, 42 72
+               C 30 80, 28 102, 42 118
+               C 40 140, 58 158, 78 158
+               C 80 172, 92 180, 100 180
+               C 108 180, 120 172, 122 158
+               C 142 158, 160 140, 158 118
+               C 172 102, 170 80, 158 72
+               C 158 38, 130 20, 100 20 Z" />
+      <!-- central fissure -->
+      <path d="M 100 20 C 98 60, 102 100, 100 180" class="glow" />
+      <!-- left hemisphere folds -->
+      <path d="M 60 55 C 68 60, 72 68, 70 78" />
+      <path d="M 52 85 C 60 88, 68 86, 72 92" />
+      <path d="M 50 110 C 58 112, 66 110, 68 118" />
+      <path d="M 60 135 C 66 140, 74 140, 80 136" />
+      <path d="M 78 155 C 85 155, 88 150, 92 150" />
+      <!-- right hemisphere folds -->
+      <path d="M 140 55 C 132 60, 128 68, 130 78" />
+      <path d="M 148 85 C 140 88, 132 86, 128 92" />
+      <path d="M 150 110 C 142 112, 134 110, 132 118" />
+      <path d="M 140 135 C 134 140, 126 140, 120 136" />
+      <path d="M 122 155 C 115 155, 112 150, 108 150" />
+      <!-- nodes -->
+      <circle cx="70" cy="72" r="2" fill="#E10600" stroke="none" />
+      <circle cx="130" cy="72" r="2" fill="#E10600" stroke="none" />
+      <circle cx="68" cy="110" r="2" fill="#FF3A30" stroke="none" />
+      <circle cx="132" cy="110" r="2" fill="#FF3A30" stroke="none" />
+      <circle cx="100" cy="90" r="3" fill="#FF3A30" stroke="none" />
+      <circle cx="100" cy="130" r="2.5" fill="#E10600" stroke="none" />
+    </svg>
+    <div class="brain-label mono">
+      <span class="big">CLAUDE OPUS 4.7</span>
+      <span class="sub">orchestrator · brain</span>
+    </div>
+  </div>
+</div>
+
+<div id="empty">no agents in session · fire a swarm</div>
+
+<!-- HUD -->
+<div class="hud tl mono">▮ theater mode</div>
+<div class="hud tr mono" id="hud-stats">0 agents</div>
+<div class="hud bl mono">[ f11 ] fullscreen · [ esc ] exit</div>
+<div class="hud br mono">swarm-orchestrator · live</div>
+
+<script>
+const MODEL_CLASS = {
+  opus: 'opus', sonnet: 'sonnet', haiku: 'haiku', unknown: 'unknown',
+};
+
+const stage = document.getElementById('stage');
+const arcs = document.getElementById('arcs');
+const empty = document.getElementById('empty');
+const hudStats = document.getElementById('hud-stats');
+
+let LATEST = [];
+let cardsByAgent = new Map();   // agent id -> element
+let arcsByAgent = new Map();
+
+function confPill(c) {
+  if (c == null) return '';
+  const pct = Math.round(c * 100);
+  let cls = 'good';
+  if (c < 0.7) cls = 'bad';
+  else if (c < 0.85) cls = 'meh';
+  return `<span class="conf ${cls}">⌖ ${pct}%</span>`;
+}
+
+function safetyPill(s) {
+  if (!s || s === 'low') return `<span class="safety L">L</span>`;
+  if (s === 'medium')    return `<span class="safety M">M</span>`;
+  if (s === 'high')      return `<span class="safety">H</span>`;
+  return '';
+}
+
+function esc(s) {
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Compute radial position for N cards around center
+function layoutPositions(n) {
+  const positions = [];
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+  const radius = Math.min(window.innerWidth, window.innerHeight) * 0.36;
+  if (n === 0) return positions;
+  for (let i = 0; i < n; i++) {
+    // start at top, go clockwise
+    const angle = -Math.PI / 2 + (2 * Math.PI * i) / n;
+    const x = centerX + Math.cos(angle) * radius;
+    const y = centerY + Math.sin(angle) * radius;
+    positions.push({ x, y, angle });
+  }
+  return positions;
+}
+
+function render(agents) {
+  // Filter out duplicates / stale: only current-session-ish.
+  // Show running first, then done (most recent first).
+  const ranked = [...agents].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'running' ? -1 : 1;
+    return b.mtime - a.mtime;
+  }).slice(0, 12);  // cap at 12 cards max for sanity
+
+  empty.style.display = ranked.length === 0 ? 'block' : 'none';
+  hudStats.textContent = `${ranked.filter(a=>a.status==='running').length} running · ${ranked.length} agents`;
+
+  const positions = layoutPositions(ranked.length);
+
+  // Remove cards that are no longer in the top 12
+  const currentIds = new Set(ranked.map(a => a.id));
+  for (const [id, el] of cardsByAgent) {
+    if (!currentIds.has(id)) {
+      el.remove();
+      cardsByAgent.delete(id);
+      const arc = arcsByAgent.get(id);
+      if (arc) { arc.remove(); arcsByAgent.delete(id); }
+    }
+  }
+
+  // Clear existing arcs and redraw (arcs are cheap)
+  arcs.setAttribute('width',  window.innerWidth);
+  arcs.setAttribute('height', window.innerHeight);
+  for (const arc of arcsByAgent.values()) arc.remove();
+  arcsByAgent.clear();
+
+  ranked.forEach((a, i) => {
+    const pos = positions[i];
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+
+    // arc: brain center to card
+    const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const midX = (centerX + pos.x) / 2;
+    const midY = (centerY + pos.y) / 2;
+    // small curve perpendicular to the line for elegance
+    const dx = pos.x - centerX, dy = pos.y - centerY;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const perpX = -dy / len * 20;
+    const perpY =  dx / len * 20;
+    arc.setAttribute('d', `M ${centerX} ${centerY} Q ${midX + perpX} ${midY + perpY} ${pos.x} ${pos.y}`);
+    arc.setAttribute('class', `arc ${a.status}`);
+    arcs.appendChild(arc);
+    arcsByAgent.set(a.id, arc);
+
+    // card: create if not exists, else update in place
+    let card = cardsByAgent.get(a.id);
+    if (!card) {
+      card = document.createElement('div');
+      card.className = 'card';
+      stage.appendChild(card);
+      cardsByAgent.set(a.id, card);
+    }
+    card.className = `card ${a.status}`;
+    card.style.left = `${pos.x - 120}px`;
+    card.style.top  = `${pos.y - 38}px`;
+
+    const modelClass = MODEL_CLASS[a.model] || 'unknown';
+    const toolLine = a.status === 'running' && a.last_tool
+      ? `<div class="tool">→ ${esc(a.last_tool)}${a.last_tool_input ? ' · ' + esc(a.last_tool_input.slice(0, 40)) : ''}</div>`
+      : (a.final_text && a.status === 'done' ? `<div class="tool">✓ complete · ${a.tool_uses} tools</div>` : '');
+
+    card.innerHTML = `
+      <div class="head">
+        <div class="dot ${a.status}"></div>
+        <span class="tag ${modelClass} mono">${a.model}</span>
+        ${safetyPill(a.safety)}
+        ${confPill(a.confidence)}
+      </div>
+      <div class="desc">${esc(a.description)}</div>
+      <div class="meta mono">${esc(a.short_id)} · ${a.tool_uses} tools</div>
+      ${toolLine}
+    `;
+  });
+}
+
+// Initial fetch (current session and nearby only)
+fetch('/api/agents?hours=2').then(r => r.json()).then(d => {
+  LATEST = d.agents || [];
+  render(LATEST);
+});
+
+// Live stream
+const es = new EventSource('/stream');
+es.onmessage = e => {
+  try {
+    const d = JSON.parse(e.data);
+    if (d.agents) {
+      // filter to only recent (last 2h) and same session as most-recent agent
+      const all = d.agents;
+      if (all.length === 0) { LATEST = []; render([]); return; }
+      const mostRecentSession = all.reduce((a,b) => a.mtime > b.mtime ? a : b).session;
+      const recent = all.filter(a =>
+        a.session === mostRecentSession &&
+        a.mtime_age_seconds < 2 * 3600
+      );
+      LATEST = recent;
+      render(recent);
+    }
+  } catch (err) { console.error(err); }
+};
+
+// Relayout on resize
+window.addEventListener('resize', () => render(LATEST));
+
+// Request fullscreen on first click/key (most browsers block autoplay)
+function goFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+}
+document.addEventListener('click', goFullscreen, { once: true });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.fullscreenElement) document.exitFullscreen?.();
+  if (e.key === 'f' || e.key === 'F') goFullscreen();
+});
+</script>
+</body>
+</html>
