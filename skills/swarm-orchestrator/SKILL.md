@@ -9,9 +9,12 @@ description: >
   resembling the OpenClaw / Hermes sub-agent pattern. Also triggers when the
   user wants cost-efficient agent work ("cheap", "bulk", "in parallel"),
   when they mention the live dashboard / swarm monitor, or when they reference
-  the "5 mitigations" / protocol for high-stakes swarms. Enforces the rule:
-  Haiku for narrow-and-structured, Sonnet for reasoning/ambiguity,
-  Opus for decisions with real consequence. Escalates on low confidence.
+  the "5 mitigations" / protocol for high-stakes swarms. Specifically triggers
+  on "fire the wow demo", "run the week start triage", "wowdemo", "week-start
+  triage" — these invoke the curated 5-muscle + 1-reviewer showcase swarm
+  documented in docs/WOW-DEMO.md. Enforces the rule: Haiku for narrow-and-
+  structured, Sonnet for reasoning/ambiguity, Opus for decisions with real
+  consequence. Escalates on low confidence.
 ---
 
 # Swarm Orchestrator

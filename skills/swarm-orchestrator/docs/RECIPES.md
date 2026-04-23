@@ -2,6 +2,26 @@
 
 Pre-designed swarm shapes you can fire by name. Each recipe defines: the decomposition, muscle tier, safety tag, and synthesis shape.
 
+## Recipe: `wow-demo` / `week-start-triage` ⭐ flagship
+
+**Trigger phrases:** *"fire the wow demo"*, *"run the week start triage"*, *"wowdemo"*
+
+**Goal:** Exercise the full framework in under 5 minutes — mixed-tier parallel muscles + sequential adversarial reviewer, producing a prioritized Top-5-actions-this-week list.
+
+**Decomposition:** 5 muscles + 1 reviewer — covers what's in flight (loose files), what's accumulating (Downloads), what's in the pipeline (diagnoses status), what's open (TODOs + checkboxes), what's shipping (git momentum). Reviewer synthesizes across dimensions.
+
+**Muscle tier:** 3× Haiku + 2× Sonnet + 1× Sonnet reviewer.
+
+**Safety:** `[L]` for informational muscles, `[M]` for decision-driving, `[H]` reviewer.
+
+**Cost / time:** ~$0.80 / ~4–5 min wall time.
+
+**Use when:** demoing the framework, weekly Monday-morning triage, smoke-testing after framework changes.
+
+**Full spec:** [`docs/WOW-DEMO.md`](WOW-DEMO.md).
+
+---
+
 ## Recipe: `folder-audit`
 
 **Goal:** Audit a large project folder for dead code, duplicates, orphans, stale files, reclaimable space, and TODOs. Produce merged findings.
