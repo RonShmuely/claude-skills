@@ -13,3 +13,7 @@ skills/stencil-studio/
 skills/supabase
 skills/supabase-postgres-best-practices
 
+# Swarm dashboard runtime artifacts (local to each machine)
+skills/swarm-orchestrator/dashboard/swarm.log
+skills/swarm-orchestrator/dashboard/mockups/
+
