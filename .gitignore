@@ -8,3 +8,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Machine-local skills (not synced across machines)
+skills/stencil-studio/
+skills/supabase
+skills/supabase-postgres-best-practices
+
