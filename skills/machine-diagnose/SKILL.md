@@ -65,10 +65,11 @@ Workflow when a diagnosis warrants visual aids (or when asked for an HTML guide)
    similar crop script that saves to `MachineGuides/images/<MACHINE>/<category>/`
    with descriptive names including the SPN/fault code where applicable
    (e.g. `sensor_7_fuel_low_pressure_SPN94.png`).
-4. **Embed in the HTML guide** — use relative paths from the guide's location to
-   the image library. If the guide sits on the Desktop and images live in
-   `MachineGuides/images/...`, reference them as
-   `MachineGuides/images/<MACHINE>/sensors/<file>.png`.
+4. **Embed in the HTML guide** — guides are saved to
+   `C:\Users\ronsh\Desktop\html files\`, and images live at
+   `C:\Users\ronsh\Desktop\MachineGuides\images\...`. From the guide's location,
+   reference images as
+   `../MachineGuides/images/<MACHINE>/<category>/<file>.png`.
 5. **Wrap images in a `<figure>` with a caption** — include the source
    ("מתוך ספר האימון של Wirtgen" / "מתוך קטלוג חלקים") and what the image shows.
    Use the `.img-figure` and `.img-side-by-side` CSS patterns already established
@@ -161,27 +162,66 @@ machine with tools in hand.
 ## Step 5 — HTML Guide (On Request)
 
 If the user asks for a file, document, guide, or says something like "תכין לי
-קובץ" / "תעשה לי מדריך" / "save this" / "make a file", create a comprehensive
-HTML diagnostic guide.
+קובץ" / "תעשה לי מדריך" / "save this" / "make a file", build the guide from the
+**canonical template** — do not hand-author CSS or layout.
 
-The HTML file should be:
-- **RTL Hebrew** (`dir="rtl"` on the html element)
-- **Dark theme** — easy to read on a phone in sunlight or a dusty cab
-- **Mobile-responsive** — the user is probably on their phone next to the machine
-- **Self-contained** — all CSS inline, no external dependencies
-- **Comprehensive** — include everything from the diagnosis:
-  - Problem summary
-  - Fuse map (visual cards showing the relevant fuses)
-  - Full sensor/component table with fault codes
-  - Step-by-step diagnosis procedure
-  - Cable routing priorities
-  - Emergency overrides
-  - Safety interlocks
-  - Tools needed
-  - Quick-reference flowchart
+### 5a. Use the template
 
-Save the file to the user's workspace folder with a descriptive name like
-`W50Ri_F31_Diagnosis.html` or `Bobcat_Hydraulic_Issue.html`.
+Source of truth:
+`C:\Users\ronsh\Desktop\design-system\diagnosis-template.html`
+
+This template defines a fixed **16-slot contract** (see the comment block at the
+top of the template for the full list). Slots are either **required** (always
+include) or **optional** (include only when the fault demands them). The
+template is self-contained — all CSS is already inlined, so the output is
+portable offline (phone in a dusty cab with no signal).
+
+| # | Slot | Req | Include when |
+|---|------|-----|---|
+| 1 | HEADER | ✓ | — |
+| 2 | PROBLEM | ✓ | — |
+| 3 | FMI_TABLE | opt | fault has 2+ FMI variants |
+| 4 | FUSES | opt | electrical fault with named fuses |
+| 5 | DANGER | opt | hardware-damage or operator-harm risk |
+| 6 | SAFETY_INTERLOCKS | opt | software/mechanical conditions block the function |
+| 7 | CAUSES | opt | 2+ distinct likely causes |
+| 8 | LOCATION | opt | hard-to-find component or sensor |
+| 9 | CABLE_ROUTING | opt | electrical fault with inspection route |
+| 10 | WIRING | opt | clear connector chain (controller → connector → device) |
+| 11 | STEPS | ✓ | — |
+| 12 | FLOWCHART | opt | branching decision tree adds value |
+| 13 | OVERRIDE | opt | machine has a fail-safe / field bypass |
+| 14 | TOOLS | opt | non-trivial tool set |
+| 15 | CONCLUSION | ✓ | — |
+| 16 | FOOTER | ✓ | — |
+
+### 5b. Fill rules
+
+- Read the template once, then for each slot you're including: replace every
+  `{{PLACEHOLDER}}` with real content. Delete entire `<section>` blocks for any
+  optional slot you're not using.
+- **Do not edit** the CSS, class names, or colors. Only swap slot content.
+- **Language:** Hebrew + English only. German from source PDFs stays inside
+  images but never appears in captions or body text.
+- **Images:** `../MachineGuides/images/<MACHINE>/<category>/<file>.png` (guide
+  lives in `html files/`, images one level up).
+- Vocabulary reuse:
+  - `.callout.danger / .warn / .info / .tip` for callouts
+  - `.step` for procedure steps
+  - `.cause-list` with `.cause-top / .cause-mid / .cause-low` for ranked causes
+  - `.fuse-card.suspect` for the likely-blown fuse
+  - `.cable-routes li.hot` for top-priority cable segment
+  - `.flow-box.q / .bad / .ok` for flowchart nodes
+  - `.quick-ref` reserved for CONCLUSION
+
+### 5c. Save
+
+Save to `C:\Users\ronsh\Desktop\html files\` with a descriptive filename:
+- `W50Ri_SPN975_FanSolenoid_Diagnosis.html`
+- `Bobcat_Hydraulic_LowPressure_Diagnosis.html`
+- `Bomag_F12_Vibration_Diagnosis.html`
+
+Pattern: `<MACHINE>_<FAULT_ID_OR_TOPIC>_Diagnosis.html`.
 
 ## Important Notes
 
