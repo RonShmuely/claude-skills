@@ -1,0 +1,52 @@
+#!/bin/sh
+# Refuse to commit in claude-skills if the local branch is behind its upstream.
+# Protects against the "two-machine overwrite" drift:
+#   Ron-ACER pushes, Ron-PC edits the old version, commits,
+#   and a silent merge masks the conflict.
+#
+# Behaviour:
+#   - Fetches the current branch's upstream (quietly).
+#   - Compares HEAD to @{u}.
+#   - If local is behind -> refuse commit, tell user to pull.
+#   - If offline (fetch fails) -> warn but allow commit.
+#   - If no upstream tracked -> allow commit (new/detached branch).
+
+set -e
+
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+
+# Skip on detached HEAD or initial commit
+if [ -z "$branch" ] || [ "$branch" = "HEAD" ]; then
+  exit 0
+fi
+
+# Check that an upstream is configured; if not, nothing to compare to
+if ! git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+  exit 0
+fi
+
+# Try to fetch. If it fails (no network / auth), warn and allow commit.
+if ! git fetch --quiet 2>/dev/null; then
+  echo "pre-commit: offline or fetch failed; skipping drift check." >&2
+  exit 0
+fi
+
+behind=$(git rev-list --count "HEAD..@{u}" 2>/dev/null || echo 0)
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null || echo "origin/?")
+
+if [ "$behind" -gt 0 ]; then
+  echo "" >&2
+  echo "========================================================================" >&2
+  echo "  BLOCKED: claude-skills is $behind commit(s) behind $upstream." >&2
+  echo "" >&2
+  echo "  Another machine pushed work you don't have yet. Committing now would" >&2
+  echo "  risk overwriting that work on the next push." >&2
+  echo "" >&2
+  echo "  Fix:   git pull --ff-only" >&2
+  echo "  Then:  retry your commit" >&2
+  echo "========================================================================" >&2
+  echo "" >&2
+  exit 1
+fi
+
+exit 0
