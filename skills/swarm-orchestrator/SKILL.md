@@ -285,13 +285,23 @@ persists for `operations.ttl_days` (default 7) after promotion lock.
 
 ## The dashboard (optional)
 
-A live Flask + Tailwind dashboard at `dashboard/` streams per-agent state from
+A live Flask + Tailwind dashboard companion that streams per-agent state from
 `~/.claude/projects/<slug>/<session>/subagents/agent-*.jsonl`. Runs local on
 `http://127.0.0.1:5173`. Shows model badges (color-coded by tier), safety
 pills, confidence pills, tool traces, and a collapsible per-session history.
 
-The dashboard is **observational, not required**. The swarm pattern works
-without it — the dashboard just makes it visible. See `dashboard/README.md`.
+The dashboard is **not required** — this skill works entirely without it.
+Install it only if you want to watch swarms live.
+
+**Install:**
+```bash
+git clone https://github.com/RonShmuely/claude-skills
+cd claude-skills/packages/swarm-dashboard
+pip install -r requirements.txt
+python app.py
+```
+
+See `packages/swarm-dashboard/README.md` for full setup and customization.
 
 ## Worked example
 
