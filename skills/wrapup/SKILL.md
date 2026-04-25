@@ -171,26 +171,70 @@ Apply to `$HOME/.claude/sessions/open-threads.md`:
 
 The ledger is the single source of truth for "what's live". Individual session summaries record history; the ledger records state.
 
-## Step 6: Dedup-check, then upload to the Brain
+## Step 6: Dedup-check, then upload to the Brain (MCP, not CLI)
+
+**Always use the `notebooklm-mcp` MCP tools — never the `notebooklm`/`nlm` CLI** (per the global "NotebookLM — MCP Only" rule in `~/.claude/CLAUDE.md`). The single CLI exception is `nlm login`, which only the user can run interactively in their terminal.
 
 ### 6a. Dedup by title
 
-Before uploading, list existing sources:
-```bash
-notebooklm source list --notebook <BRAIN_ID> --json
+Before uploading, list existing sources via the MCP:
+
+- Tool: `mcp__notebooklm-mcp__notebook_get` (or call `mcp__notebooklm-mcp__notebook_list` first to confirm the Brain ID, then list sources for it)
+
+The MCP uses the filename as the default source title. If a source with the same title already exists in the Brain, STOP and ask: *"A source named '<title>' already exists — upload as duplicate, skip, or rename?"*
+
+Because Step 4b set a descriptive `# heading`, content collisions are unlikely even with filename reuse, but dedup by title is still the hard gate.
+
+### 6b. Upload via MCP, with transient-error retry
+
+Call:
+
+```
+mcp__notebooklm-mcp__source_add(
+  notebook_id=<BRAIN_ID>,
+  source_type="file",
+  file_path=<absolute path to the session summary>,
+  wait=True,
+  wait_timeout=180
+)
 ```
 
-By default the CLI uses the filename as the source title. If a source with the same title already exists, STOP and ask: *"A source named '<title>' already exists — upload as duplicate, skip, or rename?"*
+**Retry on transient errors.** The unofficial NotebookLM upload pipeline returns generic errors like `"Could not add file source"` even when auth, file, and notebook are all healthy — these are transient (network/load-balancer/upload-pipeline blips) and almost always succeed on retry.
 
-Because Step 4b set a descriptive `# heading`, collisions on content are unlikely even with filename reuse, but dedup by title is still the hard gate.
+Retry policy:
 
-### 6b. Upload
+1. **Try 1** — call `source_add` immediately.
+2. **On any error result** (status="error" or exception), wait 2 seconds, retry.
+3. **On second failure**, wait 4 seconds, retry.
+4. **On third failure**, wait 8 seconds, retry.
+5. **On fourth failure**, do diagnostic differentiation:
+   - Call `mcp__notebooklm-mcp__refresh_auth` — if it returns failure, this is an auth problem, not transient. Tell the user to run `nlm login` in their terminal, then re-run `/wrapup`.
+   - Call `mcp__notebooklm-mcp__notebook_list` with `max_results=1` — if read works, auth is fine and the upload pipeline is genuinely degraded. Skip the upload, tell the user the local summary is durable on disk and they can manually retry later.
+6. **Never retry persistent errors** — if the error message clearly indicates a real problem (`"Notebook not found"`, `"Quota exceeded"`, `"File too large"`, `"401 unauthorized"`), skip the retry loop and report the specific failure.
 
-```bash
-notebooklm source add "$FILE" --notebook <BRAIN_ID>
+Pseudocode the implementer should follow:
+
+```
+delays = [0, 2, 4, 8]   # seconds before each attempt
+for attempt, delay in enumerate(delays, 1):
+    if delay: sleep(delay)
+    result = source_add(...)
+    if result.status == "success":
+        return result.source_id
+    if is_persistent_error(result.error):
+        report(result.error); return None
+    log(f"transient error on attempt {attempt}: {result.error}, will retry")
+
+# all retries exhausted — diagnose
+if refresh_auth().status != "success":
+    tell_user("auth degraded — run 'nlm login' in terminal, then re-run /wrapup")
+elif notebook_list(max_results=1).status != "success":
+    tell_user("read works but upload pipeline degraded — local summary is at <path>, retry manually later")
+else:
+    tell_user("upload kept failing for unknown reason — local summary is at <path>, retry manually later")
 ```
 
-If `notebooklm` is not on PATH, fall back to `~/.notebooklm-venv/bin/notebooklm`.
+When the upload eventually succeeds, capture the returned `source_id` and include it in the Step 8 confirmation.
 
 ## Step 7: Check roll-up triggers (progressive compression)
 
