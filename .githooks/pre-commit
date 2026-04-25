@@ -1,7 +1,7 @@
 #!/bin/sh
-# Refuse to commit in claude-skills if the local branch is behind its upstream.
+# Refuse to commit if the local branch is behind its upstream.
 # Protects against the "two-machine overwrite" drift:
-#   Ron-ACER pushes, Ron-PC edits the old version, commits,
+#   Machine A pushes, Machine B edits the old version, commits,
 #   and a silent merge masks the conflict.
 #
 # Behaviour:
@@ -37,7 +37,8 @@ upstream=$(git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null ||
 if [ "$behind" -gt 0 ]; then
   echo "" >&2
   echo "========================================================================" >&2
-  echo "  BLOCKED: claude-skills is $behind commit(s) behind $upstream." >&2
+  repo=$(basename "$(git rev-parse --show-toplevel)")
+  echo "  BLOCKED: $repo is $behind commit(s) behind $upstream." >&2
   echo "" >&2
   echo "  Another machine pushed work you don't have yet. Committing now would" >&2
   echo "  risk overwriting that work on the next push." >&2

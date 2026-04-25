@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup 2 — Timeline · Swarm</title>
+<style>
+  :root {
+    --crimson:      #E10600;
+    --crimson-hot:  #FF3A30;
+    --crimson-dim:  #5A0200;
+    --ink:          #060606;
+    --bg-panel:     #0a0a0a;
+    --line:         #1a1a1a;
+    --line-hi:      #2a2a2a;
+    --opus:   #c85aa8;
+    --sonnet: #5a88d0;
+    --haiku:  #5ab088;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; margin: 0;
+    background: var(--ink); color: #ddd;
+    font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif;
+    overflow: hidden;
+  }
+  .mono { font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace; }
+
+  /* Header */
+  header {
+    height: 52px;
+    padding: 0 20px;
+    display: flex; align-items: center; gap: 16px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #0a0a0a, #050505);
+  }
+  .brand { font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.25em; text-transform: uppercase; color: var(--crimson-hot); text-shadow: 0 0 6px rgba(225,6,0,.5); }
+  .brand::before { content: '▮  '; color: var(--crimson); }
+  .stats { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #888; }
+  .stats b { color: var(--crimson-hot); font-weight: 500; }
+  .controls { display: flex; gap: 6px; }
+  .ctl {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    padding: 4px 10px; border-radius: 4px;
+    background: #0a0a0a; border: 1px solid var(--line);
+    color: #888; cursor: pointer; text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .ctl:hover { color: #fff; border-color: var(--line-hi); }
+  .ctl.active { color: #fff; background: var(--crimson); border-color: var(--crimson); }
+
+  /* Main layout: left agent list + right timeline */
+  main {
+    height: calc(100vh - 52px);
+    display: grid;
+    grid-template-columns: 280px 1fr;
+  }
+
+  /* Left column */
+  .agents {
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    background: #080808;
+  }
+  .agent-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    cursor: pointer;
+    transition: background .15s;
+    position: relative;
+  }
+  .agent-row:hover { background: #0e0e0e; }
+  .agent-row.selected { background: rgba(225,6,0,.08); border-left: 2px solid var(--crimson); padding-left: 12px; }
+  .agent-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .agent-row .dot.running { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1.2s infinite; }
+  .agent-row .dot.done { background: #444; }
+  @keyframes dot-pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.5); opacity: .5; } }
+  .agent-row .body { flex: 1; min-width: 0; }
+  .agent-row .desc { font-size: 12px; color: #ddd; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-row .meta { font-size: 10px; color: #666; font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+  .tier-chip {
+    width: 6px; flex-shrink: 0; border-radius: 3px; height: 32px;
+  }
+  .tier-chip.opus   { background: var(--opus); box-shadow: 0 0 6px rgba(200,90,168,.4); }
+  .tier-chip.sonnet { background: var(--sonnet); box-shadow: 0 0 6px rgba(90,136,208,.4); }
+  .tier-chip.haiku  { background: var(--haiku); box-shadow: 0 0 6px rgba(90,176,136,.4); }
+
+  /* Callsign — speakable, scannable agent tag */
+  .callsign {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 30px; height: 22px; padding: 0 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 800; letter-spacing: 0.05em;
+    border: 1px solid;
+    flex-shrink: 0;
+  }
+  .callsign.opus   { color: #fff; background: rgba(200,90,168,.3); border-color: var(--opus); }
+  .callsign.sonnet { color: #fff; background: rgba(90,136,208,.3); border-color: var(--sonnet); }
+  .callsign.haiku  { color: #fff; background: rgba(90,176,136,.3); border-color: var(--haiku); }
+  .callsign.reviewer { color: #fff; background: var(--crimson); border-color: var(--crimson-hot); box-shadow: 0 0 10px rgba(225,6,0,.5); }
+  .callsign.sm { min-width: 26px; height: 18px; font-size: 10px; padding: 0 5px; }
+
+  /* Right timeline */
+  .timeline {
+    position: relative;
+    overflow-x: auto; overflow-y: auto;
+    padding: 20px 24px;
+  }
+
+  .axis {
+    position: sticky; top: 0; z-index: 10;
+    height: 30px;
+    background: #060606;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 4px;
+    margin-bottom: 18px;
+  }
+  .tick {
+    border-left: 1px solid #1a1a1a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #555;
+    padding: 2px 6px;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    letter-spacing: 0.08em;
+  }
+  .tick.major { color: #999; border-left-color: #2a2a2a; font-weight: 600; }
+
+  .tracks { position: relative; padding-bottom: 20px; }
+  .track {
+    height: 38px;
+    position: relative;
+    border-bottom: 1px dashed #101010;
+  }
+
+  .bar {
+    position: absolute; top: 9px; height: 22px;
+    border-radius: 4px; display: flex; align-items: center; padding: 0 10px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    overflow: hidden; white-space: nowrap;
+    cursor: pointer; transition: transform .15s, box-shadow .15s;
+  }
+  .bar:hover { transform: translateY(-1px); z-index: 4; }
+  .bar.opus   { background: rgba(200,90,168,.25); border: 1px solid var(--opus); color: #f5c5e5; box-shadow: 0 0 0 1px rgba(200,90,168,.15); }
+  .bar.sonnet { background: rgba(90,136,208,.22); border: 1px solid var(--sonnet); color: #c5d5f0; box-shadow: 0 0 0 1px rgba(90,136,208,.15); }
+  .bar.haiku  { background: rgba(90,176,136,.22); border: 1px solid var(--haiku); color: #c5e5d0; box-shadow: 0 0 0 1px rgba(90,176,136,.15); }
+  .bar.running {
+    background-image: linear-gradient(90deg, transparent 50%, rgba(225,6,0,.18) 50%);
+    background-size: 14px 100%;
+    animation: stripe 1.2s linear infinite;
+    border-color: var(--crimson);
+    box-shadow: 0 0 12px rgba(225,6,0,.35);
+  }
+  @keyframes stripe { to { background-position: 14px 0; } }
+
+  .bar .bar-label { color: #fff; font-size: 10px; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; }
+  .bar .bar-conf { margin-left: auto; padding-left: 8px; color: #9f9; font-size: 9px; font-weight: 700; }
+  .bar.running .bar-conf { color: var(--crimson-hot); }
+  .bar.low-conf .bar-conf { color: var(--crimson-hot); }
+
+  /* Tool-call tick marks on bars */
+  .tools { position: absolute; top: 0; bottom: 0; left: 0; right: 0; pointer-events: none; }
+  .tool-tick { position: absolute; top: 3px; width: 1px; height: 4px; background: rgba(255,255,255,.7); }
+  .tool-tick.opus   { background: #f5c5e5; }
+  .tool-tick.sonnet { background: #c5d5f0; }
+  .tool-tick.haiku  { background: #c5e5d0; }
+
+  /* Agent name label in track margin */
+  .track-label {
+    position: absolute; left: -260px; top: 0; width: 240px; height: 100%;
+    display: flex; align-items: center; padding-right: 14px;
+    font-size: 11px; color: #aaa;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Reviewer bar (spans all) */
+  .reviewer-marker {
+    position: absolute; top: 0; bottom: 0;
+    border-left: 1.5px dashed var(--crimson);
+    pointer-events: none;
+  }
+  .reviewer-marker::before {
+    content: 'reviewer starts →';
+    position: absolute; top: -14px; left: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    color: var(--crimson-hot); letter-spacing: 0.1em; text-transform: uppercase;
+    white-space: nowrap; text-shadow: 0 0 4px rgba(225,6,0,.6);
+  }
+
+  /* Legend */
+  .legend {
+    position: absolute; bottom: 16px; right: 24px;
+    background: #0a0a0a; border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 12px; display: flex; gap: 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    color: #888; letter-spacing: 0.08em;
+  }
+  .legend .k { display: flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 18px; height: 8px; border-radius: 2px; }
+  .legend .swatch.opus   { background: var(--opus); }
+  .legend .swatch.sonnet { background: var(--sonnet); }
+  .legend .swatch.haiku  { background: var(--haiku); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">swarm timeline</div>
+  <div class="controls">
+    <button class="ctl active">live</button>
+    <button class="ctl">session</button>
+    <button class="ctl">7d</button>
+    <button class="ctl">zoom fit</button>
+    <button class="ctl">zoom 1s</button>
+  </div>
+  <div class="stats mono">
+    <b>6</b> agents · <b>124</b> tool calls · wall <b>1m 52s</b> · parallel factor <b>4.6x</b> · cost <b>$0.82</b>
+  </div>
+</header>
+
+<main>
+
+  <!-- Agent list (left) -->
+  <aside class="agents">
+    <div class="agent-row selected">
+      <div class="tier-chip sonnet"></div>
+      <div class="dot running"></div>
+      <div class="body">
+        <div class="desc">[H] reviewer synthesis</div>
+        <div class="meta">sonnet · 42 tools · 58s · running</div>
+      </div>
+    </div>
+    <div class="agent-row">
+      <div class="tier-chip sonnet"></div>
+      <div class="dot done"></div>
+      <div class="body">
+        <div class="desc">[M] MachineGuides diagnoses</div>
+        <div class="meta">sonnet · 7 tools · 1m07s · 97%</div>
+      </div>
+    </div>
+    <div class="agent-row">
+      <div class="tier-chip sonnet"></div>
+      <div class="dot done"></div>
+      <div class="body">
+        <div class="desc">[M] git momentum</div>
+        <div class="meta">sonnet · 7 tools · 31s · 95%</div>
+      </div>
+    </div>
+    <div class="agent-row">
+      <div class="tier-chip haiku"></div>
+      <div class="dot done"></div>
+      <div class="body">
+        <div class="desc">[M] TODO / checkbox sweep</div>
+        <div class="meta">haiku · 4 tools · 14s · 95%</div>
+      </div>
+    </div>
+    <div class="agent-row">
+      <div class="tier-chip haiku"></div>
+      <div class="dot done"></div>
+      <div class="body">
+        <div class="desc">[L] Ron's Brain loose files</div>
+        <div class="meta">haiku · 6 tools · 16s · 95%</div>
+      </div>
+    </div>
+    <div class="agent-row">
+      <div class="tier-chip haiku"></div>
+      <div class="dot done"></div>
+      <div class="body">
+        <div class="desc">[L] Downloads scan 14d</div>
+        <div class="meta">haiku · 1 tool · 16s · 95%</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Timeline (right) -->
+  <section class="timeline">
+
+    <!-- Time axis -->
+    <div class="axis">
+      <div class="tick major" style="width: 100px;">T+0s</div>
+      <div class="tick" style="width: 100px;">+15s</div>
+      <div class="tick major" style="width: 100px;">+30s</div>
+      <div class="tick" style="width: 100px;">+45s</div>
+      <div class="tick major" style="width: 100px;">+60s</div>
+      <div class="tick" style="width: 100px;">+75s</div>
+      <div class="tick major" style="width: 100px;">+90s</div>
+      <div class="tick" style="width: 100px;">+105s</div>
+      <div class="tick major" style="width: 100px;">+120s</div>
+      <div class="tick" style="width: 100px;">+135s</div>
+      <div class="tick major" style="width: 100px;">+150s</div>
+    </div>
+
+    <!-- Tracks -->
+    <div class="tracks">
+
+      <!-- Track 1: Reviewer (still running, striped) -->
+      <div class="track">
+        <div class="bar sonnet running" style="left: 650px; width: 400px;">
+          <span class="bar-label">[H] reviewer synthesis — adversarial cross-check</span>
+          <span class="bar-conf">...</span>
+          <div class="tools">
+            <div class="tool-tick sonnet" style="left: 20px;"></div>
+            <div class="tool-tick sonnet" style="left: 60px;"></div>
+            <div class="tool-tick sonnet" style="left: 140px;"></div>
+            <div class="tool-tick sonnet" style="left: 200px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Track 2: MG diagnoses Sonnet -->
+      <div class="track">
+        <div class="bar sonnet" style="left: 0; width: 400px;">
+          <span class="bar-label">[M] MachineGuides diagnoses status</span>
+          <span class="bar-conf">97%</span>
+          <div class="tools">
+            <div class="tool-tick sonnet" style="left: 40px;"></div>
+            <div class="tool-tick sonnet" style="left: 80px;"></div>
+            <div class="tool-tick sonnet" style="left: 150px;"></div>
+            <div class="tool-tick sonnet" style="left: 200px;"></div>
+            <div class="tool-tick sonnet" style="left: 250px;"></div>
+            <div class="tool-tick sonnet" style="left: 310px;"></div>
+            <div class="tool-tick sonnet" style="left: 370px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Track 3: Git momentum -->
+      <div class="track">
+        <div class="bar sonnet" style="left: 0; width: 200px;">
+          <span class="bar-label">[M] git momentum</span>
+          <span class="bar-conf">95%</span>
+          <div class="tools">
+            <div class="tool-tick sonnet" style="left: 30px;"></div>
+            <div class="tool-tick sonnet" style="left: 60px;"></div>
+            <div class="tool-tick sonnet" style="left: 100px;"></div>
+            <div class="tool-tick sonnet" style="left: 140px;"></div>
+            <div class="tool-tick sonnet" style="left: 180px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Track 4: TODO sweep -->
+      <div class="track">
+        <div class="bar haiku" style="left: 0; width: 100px;">
+          <span class="bar-label">[M] TODO sweep</span>
+          <span class="bar-conf">95%</span>
+          <div class="tools">
+            <div class="tool-tick haiku" style="left: 20px;"></div>
+            <div class="tool-tick haiku" style="left: 50px;"></div>
+            <div class="tool-tick haiku" style="left: 85px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Track 5: Ron's Brain -->
+      <div class="track">
+        <div class="bar haiku" style="left: 0; width: 110px;">
+          <span class="bar-label">[L] Ron's Brain loose files</span>
+          <span class="bar-conf">95%</span>
+          <div class="tools">
+            <div class="tool-tick haiku" style="left: 15px;"></div>
+            <div class="tool-tick haiku" style="left: 40px;"></div>
+            <div class="tool-tick haiku" style="left: 60px;"></div>
+            <div class="tool-tick haiku" style="left: 85px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Track 6: Downloads -->
+      <div class="track">
+        <div class="bar haiku" style="left: 0; width: 108px;">
+          <span class="bar-label">[L] Downloads scan 14d</span>
+          <span class="bar-conf">95%</span>
+          <div class="tools">
+            <div class="tool-tick haiku" style="left: 90px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reviewer start marker -->
+      <div class="reviewer-marker" style="left: 650px; top: -14px; bottom: 0;"></div>
+
+    </div>
+
+    <div class="legend">
+      <div class="k"><div class="swatch opus"></div>opus · orchestrator</div>
+      <div class="k"><div class="swatch sonnet"></div>sonnet · specialist</div>
+      <div class="k"><div class="swatch haiku"></div>haiku · swarm</div>
+      <div class="k"><span style="color: var(--crimson-hot);">│</span> reviewer start</div>
+      <div class="k"><span style="color: #aaa;">│</span> tool call</div>
+    </div>
+
+  </section>
+
+</main>
+
+</body>
+</html>

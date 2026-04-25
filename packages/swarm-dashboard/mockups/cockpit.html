@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup 1 — Cockpit · Swarm</title>
+<style>
+  :root {
+    --crimson:      #E10600;
+    --crimson-hot:  #FF3A30;
+    --crimson-dim:  #5A0200;
+    --crimson-deep: #2A0100;
+    --bezel:        #1a1a1a;
+    --bezel-hi:     #2a2a2a;
+    --metal:        #0e0e0e;
+    --ink:          #060606;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; margin: 0; background: var(--ink); color: #ddd; overflow: hidden;
+    font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, rgba(225,6,0,.04) 0%, transparent 40%),
+      radial-gradient(ellipse at 80% 90%, rgba(225,6,0,.03) 0%, transparent 40%),
+      linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+  }
+
+  /* HUD corner labels */
+  .hud {
+    position: absolute; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--crimson-hot); text-shadow: 0 0 6px rgba(225,6,0,.6); pointer-events: none;
+  }
+
+  /* ---------- Fancy hover tooltips (crimson-themed popover) ---------- */
+  [data-tip] { position: relative; cursor: help; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    background: linear-gradient(180deg, #0a0a0a 0%, #060606 100%);
+    border: 1px solid var(--crimson);
+    color: #eee;
+    padding: 9px 13px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.5;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.02em;
+    white-space: normal;
+    max-width: 320px;
+    width: max-content;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .15s ease, transform .15s ease;
+    box-shadow:
+      0 0 24px rgba(225,6,0,.35),
+      0 6px 20px rgba(0,0,0,.6),
+      inset 0 0 0 1px rgba(255,60,40,.08);
+    text-shadow: 0 0 6px rgba(0,0,0,.8);
+  }
+  [data-tip]::before {
+    content: '';
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--crimson);
+    filter: drop-shadow(0 0 4px rgba(225,6,0,.6));
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .15s ease;
+  }
+  [data-tip]:hover::after,
+  [data-tip]:hover::before {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+    transition-delay: .25s;
+  }
+  /* Flip to above for elements near the bottom of the viewport */
+  [data-tip-pos="top"]::after {
+    top: auto; bottom: calc(100% + 10px);
+    transform: translateX(-50%) translateY(4px);
+  }
+  [data-tip-pos="top"]::before {
+    top: auto; bottom: calc(100% + 4px);
+    border-bottom-color: transparent;
+    border-top-color: var(--crimson);
+  }
+  [data-tip-pos="top"]:hover::after {
+    transform: translateX(-50%) translateY(0);
+  }
+  /* Terminal-feel prefix on the tooltip text */
+  [data-tip]::after {
+    background-image:
+      linear-gradient(90deg, var(--crimson) 0 2px, transparent 2px 100%);
+    padding-left: 16px;
+  }
+
+  /* Main grid */
+  .cockpit {
+    display: grid; height: 100vh; padding: 20px; gap: 14px;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 240px 1fr 130px;
+    grid-template-areas:
+      "gauge1 gauge2 gauge3"
+      "attitude ticker ticker"
+      "strip strip strip";
+  }
+
+  /* Bezeled panel */
+  .panel {
+    background: linear-gradient(180deg, var(--bezel) 0%, var(--metal) 100%);
+    border: 1px solid var(--bezel-hi);
+    border-radius: 10px;
+    position: relative;
+    box-shadow:
+      inset 0 0 1px rgba(255,255,255,.06),
+      inset 0 0 40px rgba(0,0,0,.4),
+      0 2px 6px rgba(0,0,0,.5);
+    overflow: hidden;
+  }
+  .panel-label {
+    position: absolute; top: 8px; left: 12px;
+    font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: #666; font-weight: 700;
+  }
+  .panel-sub {
+    position: absolute; top: 8px; right: 12px;
+    font-size: 9px; color: var(--crimson-hot); letter-spacing: 0.2em;
+  }
+
+  /* Gauges — circular dials */
+  .gauge { grid-area: gauge1; }
+  .g2    { grid-area: gauge2; }
+  .g3    { grid-area: gauge3; }
+  .dial {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .dial-svg { width: 170px; height: 170px; }
+  .dial-svg .track  { fill: none; stroke: #1a1a1a; stroke-width: 8; }
+  .dial-svg .needle { fill: none; stroke: var(--crimson); stroke-width: 8; stroke-linecap: round;
+                      filter: drop-shadow(0 0 8px rgba(225,6,0,.6)); }
+  .dial-svg .ticks line { stroke: #333; stroke-width: 1; }
+  .dial-svg .ticks line.major { stroke: #666; stroke-width: 2; }
+  .dial-value {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 34px; font-weight: 700; color: #fff; letter-spacing: 0.05em;
+    text-shadow: 0 0 10px rgba(225,6,0,.6);
+  }
+  .dial-unit {
+    position: absolute; top: calc(50% + 28px); left: 50%; transform: translateX(-50%);
+    font-size: 9px; letter-spacing: 0.3em; color: #888; text-transform: uppercase;
+  }
+
+  /* Attitude indicator — balance visualizer */
+  .attitude { grid-area: attitude; }
+  .att-core {
+    position: absolute; inset: 30px 16px 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    overflow-y: auto;
+  }
+  /* (legacy meter-row — unused in new layout but kept for ticker/other) */
+  .meter-row { display: flex; align-items: center; gap: 10px; font-size: 10px; }
+  .meter-label {
+    color: #888; letter-spacing: 0.18em; text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700;
+  }
+  .meter-bar { flex: 1; height: 10px; background: #161616; border-radius: 5px; overflow: hidden; position: relative; border: 1px solid #222; }
+  .meter-fill { height: 100%; background: linear-gradient(90deg, var(--crimson-dim), var(--crimson)); box-shadow: 0 0 8px rgba(225,6,0,.5); }
+  .meter-val { width: 40px; text-align: right; color: #ddd; font-weight: 700; font-size: 10px; }
+
+  /* 3x stacked-bar breakdown (count / spend / safety) */
+  .stack-block { display: flex; flex-direction: column; gap: 4px; }
+  .stack-hdr {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px;
+  }
+  .stack-hdr .meter-label { font-size: 9px; }
+  .stack-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: #ddd; font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .att-stack {
+    display: flex; height: 14px;
+    border-radius: 3px; overflow: hidden;
+    border: 1px solid #222;
+  }
+  .stack-opus   { background: rgba(160,60,140,.75); }
+  .stack-sonnet { background: rgba(60,120,200,.75); }
+  .stack-haiku  { background: rgba(60,160,120,.75); }
+  .stack-L      { background: rgba(100,100,100,.55); }
+  .stack-M      { background: rgba(200,140,40,.70); }
+  .stack-H      { background: rgba(225,6,0,.75); }
+  .stack-legend {
+    display: flex; gap: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: #888;
+    letter-spacing: 0.05em;
+  }
+  .stack-legend span::before { content: '■ '; margin-right: 1px; }
+  .stack-legend .opus::before   { color: #d080c0; }
+  .stack-legend .sonnet::before { color: #80a0e0; }
+  .stack-legend .haiku::before  { color: #80c0a0; }
+  .stack-legend .low::before    { color: #888; }
+  .stack-legend .medium::before { color: #ffc870; }
+  .stack-legend .high::before   { color: var(--crimson-hot); }
+
+  /* Ticker tape — scrolling tool calls */
+  .ticker { grid-area: ticker; }
+  .tape {
+    position: absolute; inset: 28px 16px 16px 16px;
+    overflow: hidden;
+    background: #000; border-radius: 6px; border: 1px solid #1a1a1a;
+    padding: 8px 10px;
+    font-size: 11px; line-height: 1.7;
+  }
+  .tape-line { white-space: nowrap; color: #aaa; }
+  .tape-line .ts { color: #555; margin-right: 10px; }
+  .tape-line .tag { display: inline-block; padding: 0 5px; border-radius: 2px; font-size: 9px; letter-spacing: 0.1em; margin-right: 6px; }
+  .tape-line .tag.opus   { color: #ffa6e5; background: rgba(160,60,140,.25); }
+  .tape-line .tag.sonnet { color: #a0c8ff; background: rgba(60,120,200,.25); }
+  .tape-line .tag.haiku  { color: #a0e5c0; background: rgba(60,160,120,.25); }
+  .tape-line .tool  { color: var(--crimson-hot); }
+  .tape-line .arg   { color: #888; }
+  .tape-line.pulse { animation: tape-in .3s ease; }
+  @keyframes tape-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* Agent strip — bottom */
+  .strip { grid-area: strip; }
+  .strip-inner { position: absolute; inset: 24px 14px 14px 14px; display: flex; gap: 8px; align-items: stretch; }
+  .lamp {
+    flex: 1 1 0;
+    min-width: 0;
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px;
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+    position: relative; overflow: hidden;
+  }
+  .lamp.running {
+    border-color: var(--crimson);
+    box-shadow: 0 0 18px rgba(225,6,0,.4), inset 0 0 12px rgba(225,6,0,.08);
+  }
+  .lamp.done { border-color: rgba(225,6,0,.3); }
+  .lamp .lamp-top { display: flex; align-items: center; gap: 6px; }
+  .lamp .dot { width: 6px; height: 6px; border-radius: 50%; background: #333; }
+  .lamp.running .dot { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1s infinite; }
+  @keyframes dot-pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.5); } }
+
+  /* Callsign — the jersey number of the agent */
+  .callsign {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 18px; padding: 0 7px;
+    border-radius: 3px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.04em;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .callsign.opus   { color: #fff; background: rgba(200,90,168,.3); border-color: #d080c0; box-shadow: inset 0 0 0 1px rgba(208,128,192,.15); }
+  .callsign.sonnet { color: #fff; background: rgba(90,136,208,.3); border-color: #80a0e0; box-shadow: inset 0 0 0 1px rgba(128,160,224,.15); }
+  .callsign.haiku  { color: #fff; background: rgba(90,176,136,.3); border-color: #80c0a0; box-shadow: inset 0 0 0 1px rgba(128,192,160,.15); }
+  .callsign.reviewer { color: #fff; background: var(--crimson); border-color: var(--crimson-hot); box-shadow: 0 0 10px rgba(225,6,0,.6); }
+
+  .lamp .model { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; }
+  .lamp .model.opus   { color: #d080c0; }
+  .lamp .model.sonnet { color: #80a0e0; }
+  .lamp .model.haiku  { color: #80c0a0; }
+  .lamp .desc { font-size: 10px; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .lamp .stat { font-size: 9px; color: #666; margin-top: auto; }
+  .lamp .conf { position: absolute; top: 6px; right: 8px; font-size: 9px; color: #80e0a0; }
+  .lamp.bad .conf { color: var(--crimson-hot); }
+
+  /* Top-bar */
+  .topbar { position: absolute; top: 6px; left: 20px; right: 20px; display: flex; align-items: center; justify-content: space-between; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; }
+  .topbar .l { color: var(--crimson-hot); text-shadow: 0 0 6px rgba(225,6,0,.6); }
+  .topbar .r { color: #555; }
+
+  /* View toggle (Agents / Tasks) */
+  .vtoggle {
+    display: inline-flex; gap: 2px;
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px; padding: 2px;
+    margin-left: auto; margin-right: 20px;
+  }
+  .vtoggle button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 3px;
+    background: transparent; border: none; color: #888; cursor: pointer;
+    transition: all .15s;
+  }
+  .vtoggle button:hover { color: #ddd; }
+  .vtoggle button.active { color: #fff; background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.4); }
+
+  /* Stats panel (top-right, big-number grid) */
+  .stats-panel .stats-grid {
+    position: absolute; inset: 30px 10px 10px 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 4px;
+  }
+  .stat {
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 5px;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 4px 10px;
+    position: relative;
+    transition: border-color .2s;
+  }
+  .stat:hover { border-color: var(--crimson-deep); }
+  .stat-v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px; font-weight: 700; color: #fff;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 12px rgba(225,6,0,.35);
+  }
+  .stat-v .hot { color: var(--crimson); }
+  .stat-v .stat-s { font-size: 16px; color: #888; margin-left: 2px; }
+  .stat-l {
+    font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #666; margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Tasks panel (top-left, permanent) */
+  .tasks-panel .tasks-inside {
+    position: absolute; inset: 28px 12px 12px 12px;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+    gap: 4px;
+  }
+  /* Roster panel (top-middle, permanent) */
+  .roster-panel .roster-inside {
+    position: absolute; inset: 28px 12px 12px 12px;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+    gap: 1px;
+  }
+  .roster-row {
+    display: grid;
+    grid-template-columns: 8px 64px 16px 1fr auto;
+    gap: 8px; align-items: center;
+    padding: 4px 6px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    transition: background .12s;
+  }
+  .roster-row:hover { background: rgba(255,255,255,.02); }
+  .roster-row .rdot { width: 6px; height: 6px; border-radius: 50%; background: #444; }
+  .roster-row.running .rdot { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1.1s infinite; }
+  .roster-row.done .rdot { background: #80e0a0; }
+  .roster-row.idle .rdot { background: #555; }
+  .roster-row .rsfty {
+    font-size: 8px; font-weight: 800; text-align: center;
+    padding: 1px 4px; border-radius: 2px; border: 1px solid;
+  }
+  .roster-row .rsfty.L { color: #999; border-color: #333; }
+  .roster-row .rsfty.M { color: #ffc870; border-color: #906000; }
+  .roster-row .rsfty.H { color: var(--crimson-hot); border-color: var(--crimson); }
+  .roster-row .rdesc { color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: -apple-system, sans-serif; font-size: 11px; }
+  .roster-row .rtool { color: var(--crimson-hot); justify-self: end; font-size: 10px; animation: pulse-op 1.4s ease-in-out infinite; }
+  .roster-row .rstat { color: #666; justify-self: end; font-size: 10px; }
+  .roster-row.running .rstat { color: var(--crimson-hot); }
+
+  /* (Deprecated) tasks-view at bottom — no longer shown; Tasks lives in top-left now */
+  .tasks-view { display: none !important; }
+  .task-row {
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 5px;
+    padding: 5px 8px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .task-row:hover { border-color: #2a2a2a; }
+  .task-row.running { border-color: var(--crimson); box-shadow: 0 0 12px rgba(225,6,0,.2); }
+  .task-head { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; font-size: 10px; }
+  .task-chev { color: var(--crimson-hot); font-size: 9px; transition: transform .2s; width: 8px; }
+  .task-row.expanded .task-chev { transform: rotate(90deg); }
+  .task-dot { width: 7px; height: 7px; border-radius: 50%; background: #444; flex-shrink: 0; }
+  .task-row.running .task-dot { background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.9); animation: dot-pulse 1.1s infinite; }
+  .task-name { font-size: 11px; color: #fff; font-weight: 700; letter-spacing: 0.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .task-pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    padding: 1px 5px; border-radius: 2px;
+    background: #161616; border: 1px solid #222; color: #999;
+  }
+  .task-pill.done { color: #80e0a0; border-color: #205040; }
+  .task-pill.err  { color: var(--crimson-hot); border-color: var(--crimson-dim); }
+  .task-pill.spent{ color: #ddd; font-weight: 600; }
+  .cs-strip {
+    display: flex; flex-wrap: wrap; gap: 3px;
+    padding: 4px 0 0 14px;
+  }
+  .task-safety {
+    font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; border: 1px solid;
+  }
+  .task-safety.L { color: #999; border-color: #333; }
+  .task-safety.M { color: #ffc870; border-color: #906000; }
+  .task-safety.H { color: var(--crimson-hot); border-color: var(--crimson); }
+  .task-meta {
+    margin-left: auto; font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: #888; display: flex; gap: 14px;
+  }
+  .task-meta .done { color: #80e0a0; }
+  .task-meta .spent { color: #ddd; font-weight: 600; }
+
+  .task-agents {
+    max-height: 0; overflow: hidden;
+    transition: max-height .3s ease;
+    margin-top: 0;
+  }
+  .task-row.expanded .task-agents { max-height: 500px; margin-top: 8px; }
+  .agent-item {
+    display: grid;
+    grid-template-columns: 48px 1fr 80px 60px 50px;
+    gap: 8px; align-items: center;
+    padding: 4px 8px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    margin-bottom: 1px;
+  }
+  .agent-item:hover { background: rgba(225,6,0,.05); }
+  .agent-item.running { color: #fff; }
+  .agent-item.running .a-desc { color: #fff; }
+  .agent-item .a-tag { }
+  .agent-item .a-desc { color: #ccc; font-family: -apple-system, sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-item .a-stat { color: #666; text-align: right; }
+  .agent-item .a-conf { text-align: right; font-weight: 700; }
+  .agent-item .a-conf.good { color: #80e0a0; }
+  .agent-item .a-conf.meh  { color: #ffc870; }
+  .agent-item .a-conf.bad  { color: var(--crimson-hot); }
+  .agent-item .a-conf.running { color: var(--crimson-hot); animation: pulse-op 1.2s ease-in-out infinite; }
+  @keyframes pulse-op { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+  .agent-item .a-glyph { text-align: center; color: #666; }
+  .agent-item.done .a-glyph { color: #80e0a0; }
+  .agent-item.errored .a-glyph { color: var(--crimson-hot); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="l">▮ COCKPIT · SWARM OPS</span>
+  <span class="r">mockup · 2026-04-23 · alt-ui/cockpit</span>
+</div>
+
+<div class="cockpit">
+
+  <!-- Panel 1: TASKS (hierarchical, replaces burn-rate dial) -->
+  <section class="panel gauge tasks-panel">
+    <div class="panel-label">tasks</div>
+    <div class="panel-sub">4 · 13 agents</div>
+    <div class="tasks-inside">
+
+      <div class="task-row running expanded">
+        <div class="task-head" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="task-dot"></div>
+          <span class="task-name">Week Start Triage</span>
+          <span class="task-safety H">H</span>
+          <span class="task-pill">5/6</span>
+          <span class="task-pill spent">$0.82</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku" title="Ron's Brain loose files · 95%">haiku</span>
+            <span class="callsign sm haiku" title="Downloads 14d · 95%">haiku2</span>
+            <span class="callsign sm haiku" title="TODO sweep · 95%">haiku3</span>
+            <span class="callsign sm sonnet" title="git momentum · 95%">sonnet</span>
+            <span class="callsign sm sonnet" title="MG diagnoses · 97%">sonnet2</span>
+            <span class="callsign sm reviewer" title="reviewer synthesis · running">R·sonnet3</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-row">
+        <div class="task-head" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="task-dot"></div>
+          <span class="task-name">MachineGuides Audit</span>
+          <span class="task-safety M">M</span>
+          <span class="task-pill done">5/5</span>
+          <span class="task-pill spent">$1.80</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku" title="Section A · web/ · 92%">haiku</span>
+            <span class="callsign sm haiku" title="Section B · data · 72%">haiku2</span>
+            <span class="callsign sm haiku" title="Section C · pipeline · 97%">haiku3</span>
+            <span class="callsign sm haiku" title="Section D · scripts · 95%">haiku4</span>
+            <span class="callsign sm haiku" title="Section E · docs · 92%">haiku5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-row">
+        <div class="task-head" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="task-dot"></div>
+          <span class="task-name">Pixel verify + EA uninstall</span>
+          <span class="task-safety M">M</span>
+          <span class="task-pill err">1 ⚠</span>
+          <span class="task-pill spent">$1.20</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm sonnet" title="API 500 at 49 tools · EA freed 38 GB before crash">sonnet</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="task-row">
+        <div class="task-head" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="task-dot"></div>
+          <span class="task-name">Wow demo receipt</span>
+          <span class="task-safety L">L</span>
+          <span class="task-pill done">1/1</span>
+          <span class="task-pill spent">$0.02</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku" title="skill structure verify · 95%">haiku</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Panel 2: AGENT ROSTER (live list) -->
+  <section class="panel g2 roster-panel">
+    <div class="panel-label">agent roster</div>
+    <div class="panel-sub">6 active · 13 total session</div>
+    <div class="roster-inside">
+      <div class="roster-row running">
+        <div class="rdot"></div>
+        <span class="callsign sm reviewer">R·sonnet3</span>
+        <span class="rsfty H">H</span>
+        <span class="rdesc">reviewer synthesis</span>
+        <span class="rtool">→ Task · synthesize 5 muscle outputs</span>
+      </div>
+      <div class="roster-row done">
+        <div class="rdot"></div>
+        <span class="callsign sm sonnet">sonnet2</span>
+        <span class="rsfty M">M</span>
+        <span class="rdesc">MG diagnoses status</span>
+        <span class="rstat">✓ 97% · 7 tools · 1m07s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="rdot"></div>
+        <span class="callsign sm sonnet">sonnet</span>
+        <span class="rsfty M">M</span>
+        <span class="rdesc">git momentum</span>
+        <span class="rstat">✓ 95% · 7 tools · 31s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="rdot"></div>
+        <span class="callsign sm haiku">haiku3</span>
+        <span class="rsfty M">M</span>
+        <span class="rdesc">TODO / checkbox sweep</span>
+        <span class="rstat">✓ 95% · 4 tools · 14s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="rdot"></div>
+        <span class="callsign sm haiku">haiku2</span>
+        <span class="rsfty L">L</span>
+        <span class="rdesc">Downloads scan 14d</span>
+        <span class="rstat">✓ 95% · 1 tool · 16s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="rdot"></div>
+        <span class="callsign sm haiku">haiku</span>
+        <span class="rsfty L">L</span>
+        <span class="rdesc">Ron's Brain loose files</span>
+        <span class="rstat">✓ 95% · 6 tools · 16s</span>
+      </div>
+      <div class="roster-row idle">
+        <div class="rdot"></div>
+        <span class="callsign sm opus">opus</span>
+        <span class="rsfty H">H</span>
+        <span class="rdesc">disk cleanup audit (earlier)</span>
+        <span class="rstat">✓ 100% · 25 tools · 5m49s</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Panel 3: STATS (replaces avg-conf dial) -->
+  <section class="panel g3 stats-panel">
+    <div class="panel-label">session stats</div>
+    <div class="panel-sub">live</div>
+    <div class="stats-grid">
+      <div class="stat">
+        <div class="stat-v">0.93</div>
+        <div class="stat-l">avg confidence</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">$0.82</div>
+        <div class="stat-l">spend (session)</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v"><span class="hot">2</span>/6</div>
+        <div class="stat-l">running / total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">4.6<span class="stat-s">×</span></div>
+        <div class="stat-l">parallel factor</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">124</div>
+        <div class="stat-l">tool calls</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">0</div>
+        <div class="stat-l">escalations</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Attitude / balance -->
+  <section class="panel attitude" title="Distribution views of the swarm — by model tier, by spend, by safety level. All three are snapshots of the same agents from different angles.">
+    <div class="panel-label">swarm balance</div>
+    <div class="panel-sub">distributions</div>
+    <div class="att-core">
+
+      <div class="stack-block" title="Count of agents per model tier (who's on the field)">
+        <div class="stack-hdr">
+          <span class="meter-label">by tier · count</span>
+          <span class="stack-total">6 agents</span>
+        </div>
+        <div class="att-stack">
+          <div class="stack-opus"   style="flex: 1;" title="1 opus"></div>
+          <div class="stack-sonnet" style="flex: 3;" title="3 sonnet (incl. reviewer)"></div>
+          <div class="stack-haiku"  style="flex: 3;" title="3 haiku"></div>
+        </div>
+        <div class="stack-legend">
+          <span class="opus"   title="Opus: orchestrator + heavy muscle">opus 1</span>
+          <span class="sonnet" title="Sonnet: specialist (reasoning, browser, code, review)">sonnet 3</span>
+          <span class="haiku"  title="Haiku: swarm workers (narrow, structured)">haiku 3</span>
+        </div>
+      </div>
+
+      <div class="stack-block" title="Share of estimated session cost going to each tier. Opus per-token is ~15× Haiku, so a small Opus slice can dominate spend.">
+        <div class="stack-hdr">
+          <span class="meter-label">by tier · spend</span>
+          <span class="stack-total">$0.82</span>
+        </div>
+        <div class="att-stack">
+          <div class="stack-opus"   style="flex: 42;" title="Opus: ~$0.34 (42%)"></div>
+          <div class="stack-sonnet" style="flex: 45;" title="Sonnet: ~$0.37 (45%)"></div>
+          <div class="stack-haiku"  style="flex: 13;" title="Haiku: ~$0.11 (13%)"></div>
+        </div>
+        <div class="stack-legend">
+          <span class="opus"   title="Orchestrator + reviewer reasoning">opus 42%</span>
+          <span class="sonnet" title="3 Sonnets doing mid-tier reasoning">sonnet 45%</span>
+          <span class="haiku"  title="3 Haikus doing bulk scan work">haiku 13%</span>
+        </div>
+      </div>
+
+      <div class="stack-block" title="Distribution of safety tags across dispatched agents. [L] is informational, [M] drives decisions, [H] has real consequences if wrong.">
+        <div class="stack-hdr">
+          <span class="meter-label">by safety</span>
+          <span class="stack-total">6 agents</span>
+        </div>
+        <div class="att-stack">
+          <div class="stack-L" style="flex: 2;" title="2 agents tagged [L] low-stakes (informational)"></div>
+          <div class="stack-M" style="flex: 3;" title="3 agents tagged [M] medium-stakes (drive decisions)"></div>
+          <div class="stack-H" style="flex: 1;" title="1 agent tagged [H] high-stakes (reviewer)"></div>
+        </div>
+        <div class="stack-legend">
+          <span class="low"    title="Low-stakes: descriptive output, no action">[L] 2</span>
+          <span class="medium" title="Medium-stakes: drives decisions, escalation + spot-check active">[M] 3</span>
+          <span class="high"   title="High-stakes: full protocol + reviewer loop">[H] 1</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Ticker / tape -->
+  <section class="panel ticker">
+    <div class="panel-label">tool-call tape</div>
+    <div class="panel-sub">rolling · last 15</div>
+    <div class="tape" id="tape">
+      <div class="tape-line"><span class="ts">20:12:47</span><span class="tag sonnet">sonnet2</span><span class="tool">Read</span>  <span class="arg">skills/swarm-orchestrator/SKILL.md</span></div>
+      <div class="tape-line"><span class="ts">20:12:45</span><span class="tag haiku">haiku3</span><span class="tool">Glob</span>  <span class="arg">**/*.json — diagnoses/</span></div>
+      <div class="tape-line"><span class="ts">20:12:43</span><span class="tag haiku">haiku3</span><span class="tool">Grep</span>  <span class="arg">"TODO|FIXME" — *.py, *.md</span></div>
+      <div class="tape-line"><span class="ts">20:12:41</span><span class="tag sonnet">sonnet</span><span class="tool">Bash</span>  <span class="arg">git log --since="7 days ago"</span></div>
+      <div class="tape-line"><span class="ts">20:12:39</span><span class="tag haiku">haiku2</span><span class="tool">Read</span>  <span class="arg">Downloads/ — 37 items</span></div>
+      <div class="tape-line"><span class="ts">20:12:37</span><span class="tag opus"  >opus</span><span class="tool">Task</span>  <span class="arg">dispatch: R·sonnet3 reviewer</span></div>
+      <div class="tape-line"><span class="ts">20:12:35</span><span class="tag sonnet">sonnet2</span><span class="tool">Read</span>  <span class="arg">MG/diagnoses/W200i_*.json</span></div>
+      <div class="tape-line"><span class="ts">20:12:33</span><span class="tag haiku">haiku</span><span class="tool">Glob</span>  <span class="arg">Ron's Brain/ top-level *.md</span></div>
+      <div class="tape-line"><span class="ts">20:12:31</span><span class="tag opus"  >opus</span><span class="tool">Task</span>  <span class="arg">dispatch: haiku/2/3 × parallel</span></div>
+      <div class="tape-line"><span class="ts">20:12:29</span><span class="tag opus"  >opus</span><span class="tool">Read</span>  <span class="arg">SWARM-PROTOCOL.md</span></div>
+    </div>
+  </section>
+
+  <!-- Agent pilot-lights strip -->
+  <section class="panel strip">
+    <div class="panel-label">active agents · pilot lights</div>
+    <div class="panel-sub">6 of 6</div>
+    <div class="strip-inner">
+      <div class="lamp running">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign reviewer">R·sonnet3</span></div>
+        <div class="desc">[H] reviewer synthesis</div>
+        <div class="stat">42 tools · 58s</div>
+      </div>
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign sonnet">sonnet2</span></div>
+        <div class="desc">[M] MG diagnoses status</div>
+        <div class="stat">7 tools · 1m07s</div>
+        <div class="conf">97%</div>
+      </div>
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign haiku">haiku</span></div>
+        <div class="desc">[L] Ron's Brain loose files</div>
+        <div class="stat">6 tools · 16s</div>
+        <div class="conf">95%</div>
+      </div>
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign haiku">haiku2</span></div>
+        <div class="desc">[L] Downloads scan 14d</div>
+        <div class="stat">1 tool · 16s</div>
+        <div class="conf">95%</div>
+      </div>
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign haiku">haiku3</span></div>
+        <div class="desc">[M] TODO sweep</div>
+        <div class="stat">4 tools · 14s</div>
+        <div class="conf">95%</div>
+      </div>
+      <div class="lamp running">
+        <div class="lamp-top"><div class="dot"></div><span class="callsign sonnet">sonnet</span></div>
+        <div class="desc">[M] git momentum</div>
+        <div class="stat">7 tools · 31s</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+// Live-feel: prepend a new tape line every 2s and cap at 12 lines
+const tape = document.getElementById('tape');
+const synthesized = [
+  { m: 'haiku',  c: 'haiku',  t: 'Read', a: 'file_path: package.json' },
+  { m: 'sonnet', c: 'sonnet2', t: 'Grep', a: '"hypothesis_" — diagnoses/*.json' },
+  { m: 'haiku',  c: 'haiku2',  t: 'Bash', a: 'ls Downloads/ | wc -l' },
+  { m: 'sonnet', c: 'sonnet', t: 'Read', a: 'web/src/proxy.ts' },
+  { m: 'opus',   c: 'opus',   t: 'Task', a: 'synthesize 5 muscle outputs' },
+];
+let idx = 0;
+setInterval(() => {
+  const ev = synthesized[idx++ % synthesized.length];
+  const now = new Date();
+  const ts = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const line = document.createElement('div');
+  line.className = 'tape-line pulse';
+  line.innerHTML = `<span class="ts">${ts}</span><span class="tag ${ev.m}">${ev.c}</span><span class="tool">${ev.t}</span>  <span class="arg">${ev.a}</span>`;
+  tape.prepend(line);
+  while (tape.children.length > 12) tape.lastChild.remove();
+}, 2000);
+</script>
+
+</body>
+</html>

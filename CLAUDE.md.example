@@ -1,0 +1,24 @@
+# Global Preferences (example)
+
+This file is a **template**. Copy it to `~/.claude/CLAUDE.md` (or hardlink it into a private config repo) and edit to taste. Personal preferences should not live in this public skills repo.
+
+## Inspectors — conversational role system
+
+"Inspectors" are named role prompts stored under `~/.claude/inspectors/<name>.md`. Each defines a role, operating principles, behavior, output format, and hard rules.
+
+**Launching an inspector:**
+- **Explicit command** — user says "use the validator", "mvp-architect this", "run the X inspector" → load `inspector-<name>.md` and adopt it for the response.
+- **Implicit match** — if a query clearly fits an inspector's trigger description, use it without being asked. If ambiguous, ask which inspector to apply.
+- **Stay loaded** across follow-up messages on the same topic until the user switches inspector, says "done" / "exit inspector", or pivots to an unrelated task.
+- **One at a time** — don't blend personas.
+- **Override default tone and format** — a direct-tone inspector means no hedging; a structured-output inspector means use its template.
+
+**Creating new inspectors:** when the user says "create an inspector for X", write a new file at `~/.claude/inspectors/inspector-<name>.md` following the same section layout.
+
+## Session Wrap-Up
+
+The `/wrapup` skill (in this repo) handles end-of-session memory and Brain saves. Trigger when the user says "wrap up", "save this session", "end of session", or similar. The skill itself documents its full procedure.
+
+## Other rules
+
+Add your own personal rules below — coding style, response format, file-handling preferences, etc.

@@ -1,170 +1,92 @@
-# Claude Brain — Synced Config for Claude Code
+# claude-skills
 
-Personal Claude Code configuration + custom skills, synced between Ron-PC and Ron-ACER via Google Drive Mirror with git history on top.
+Custom skills + inspectors for [Claude Code](https://docs.claude.com/claude-code), built and maintained by Ron Shmuely.
 
----
+Drop-in additions to your `~/.claude/` setup. Every skill is self-contained — copy the folder you want and Claude Code picks it up.
 
-## Contents
-
-| Item | Purpose | Linked into |
-|---|---|---|
-| `CLAUDE.md` | Global Claude Code system prompt (preferences, workflows, inspector rules) | `~/.claude/CLAUDE.md` (hardlink) |
-| `inspectors/` | Conversational role prompts loadable by name | `~/.claude/inspectors/` (junction) |
-| `skills/` | Custom slash commands | `~/.claude/skills/` (junction) |
-| `settings.json` | Hooks, statusline, enabled plugins, model choice | `~/.claude/settings.json` (hardlink) |
-| `statusline-command.sh` | Bash script that renders the bottom status line (cwd, model, context %) | `~/.claude/statusline-command.sh` (hardlink) |
-| `project-memory/<name>/` | Accumulated per-project memory (user/feedback/project/reference) | `~/.claude/projects/C--<path>/memory/` (junction, one per project) |
-
-Not synced (intentional): `settings.local.json` (per-machine Bash permissions), `.credentials.json` (auth tokens), conversation logs (`.jsonl` session files), plugin caches, shell snapshots.
-
-**Project memory folders currently synced:** `desktop`, `weldingref`, `garageinfo`, `voicelayerapp`. Add more by dropping a folder into `project-memory/` and junctioning it (see setup below).
+> **Personal config (CLAUDE.md, settings.json, project memory) lives in a separate private repo.** This one is the shareable half: skills + inspectors, ready to use as-is.
 
 ---
 
 ## Skills
 
-### 🔧 machine-diagnose
-Diagnose vehicle / heavy equipment faults by querying NotebookLM technical notebooks. Supports Wirtgen milling machines (W50Ri, W200i), Bobcat/Gehl skid loaders, Bomag rollers, Volvo trucks, and any machine with a notebook. Works in Hebrew and English.
+| Skill | What it does | Trigger |
+|---|---|---|
+| **machine-diagnose** | Diagnose vehicle / heavy-equipment faults by querying NotebookLM technical notebooks. Hebrew + English. | `/machine-diagnose`, or describe a machine fault naturally |
+| **diagnosis-html** | Generate a standalone single-file HTML diagnosis matching the dark-industrial design reference. | After `machine-diagnose`, when user wants an HTML artifact |
+| **swarm-orchestrator** | Multi-agent swarm framework with disciplined model-tier selection (Haiku narrow, Sonnet ambiguity, Opus consequence). 5-mitigation protocol, anomaly detection, memory tiers, live `/dashboard` with `/cockpit` + `/theater` modes. | `/swarm`, `swarm`, `multi-agent`, `wow demo` |
+| **wrapup** | End-of-session: triage open threads, save memories, write a dated session summary, update the open-threads ledger, upload to NotebookLM. Supports `--rollup weekly\|monthly`. | `/wrapup`, "wrap up the session" |
+| **autosave** | Periodic mid-session memory save (every ~10 min of active work). Background habit, no user prompt needed. | Self-triggers during active work |
+| **web-cowork** | Launch Chromium via Playwright MCP and co-work on a local page. Includes Mark Mode overlay (`mark-mode.js`) for visual annotation. | `/web-cowork`, "let's cowork on X" |
+| **app-icon-generator** | Produce a 512px + 256px PNG app/folder icon from a design philosophy. | "make me an icon for X" |
+| **quick-mockup** | Generate a quick HTML mockup (font/layout iteration) using a canonical dark-industrial template. | `/quick-mockup`, "mock up X" |
+| **stencil-studio** | Build offline AI-assisted image/stencil editor desktop apps (Flask + Fabric.js + Ollama / ComfyUI). | `/stencil-studio`, "build a stencil app" |
+| **pcusage** | Live PC system stats (CPU, GPU, RAM, disk, network, processes). Windows / PowerShell. | "PCUSAGE", "system stats" |
+| **notebooklm** | Full programmatic NotebookLM API — create notebooks, add sources, generate podcasts/videos/reports/quizzes/infographics, download artifacts. | `/notebooklm`, "create a podcast about X" |
+| **youtube-transcript** | Download YouTube transcripts. | YouTube URL or "get transcript of X" |
+| **skill-forge** | Self-authoring skill — write SKILL.md for a new skill from a captured pattern. | Invoked by `wrapup`'s forge pass |
 
-**Trigger:** `/machine-diagnose`, or describe a machine problem naturally.
-**Requires:** notebooklm-mcp configured.
-
-### 🗂️ wrap-up
-End-of-session wrap-up that saves conversation highlights to NotebookLM "Ron's Brain" as long-term memory. Deduplicates.
-
-**Trigger:** `/wrap-up`, "wrap up", "save this session", "store this in my brain".
-**Requires:** notebooklm-mcp configured.
-
-### 🌐 web-cowork
-Live browser collaboration via Playwright MCP. Claude drives Chromium while you watch. Includes Mark Mode overlay for visual annotation.
-
-**Trigger:** `/web-cowork`, "cowork on X", "turn on mark mode".
-**Requires:** Playwright MCP plugin, Python 3 on PATH.
-
-### 🎨 app-icon-generator
-Generate app/folder icons (512px + 256px PNG) from a design philosophy.
-
-**Trigger:** "icon for X", "app icon", "folder icon".
-
-### 💾 autosave
-Periodically saves important conversation context to memory files during active sessions.
-
-**Trigger:** runs itself every ~10 minutes of active conversation, or at session wind-down.
-
-### 📊 context-monitor
-Warns at ~58% context window usage so sessions don't run out of room.
-
-**Trigger:** runs itself every 8–10 exchanges.
-
-### 💻 pcusage
-Live PC system stats — CPU, GPU, RAM, disk, network, running processes.
-
-**Trigger:** "pc usage", "system stats", "how's my PC doing", "PCUSAGE".
-
-### 📺 youtube-transcript
-Download YouTube video transcripts / captions.
-
-**Trigger:** paste a YouTube URL or ask to fetch a transcript.
+Some skills (e.g. `swarm-orchestrator`) ship their own `docs/`, `templates/`, `lib/`, and `dashboard/` — see each skill's folder.
 
 ---
 
 ## Inspectors
 
-Conversational role prompts that override Claude's default tone and output format for the duration of a task. Invoked by name ("use the validator", "mvp-architect this") or by implicit match on the user's query. Full rules are in `CLAUDE.md`.
+Conversational role prompts that override Claude's default tone and output for the duration of a task.
 
-Current inspectors:
-- `inspector-validator` — diagnostics-first code/design reviewer
-- `inspector-mvp-architect` — senior staff systems architect across ML / frontend / backend
+| Inspector | Role |
+|---|---|
+| **inspector-validator** | Diagnostics-first code/design reviewer |
+| **inspector-mvp-architect** | Senior staff systems architect across ML / FE / BE |
 
-Add more by dropping a new `inspector-<name>.md` into `inspectors/` and pushing.
+To invoke: "use the validator", "mvp-architect this", "run the X inspector". Inspector stays loaded across follow-ups until you switch or pivot.
 
 ---
 
-## Installation
+## Install
 
-### Primary path: Google Drive Mirror (both machines)
+Pick the skill(s) you want and drop the folder into your `~/.claude/skills/`:
 
-1. Install [Google Drive for Desktop](https://www.google.com/drive/download/) in **Mirror files** mode (not Stream). Accept default location `C:\Users\<you>\My Drive\`.
-2. Wait for `My Drive\claude-brain\claude-skills\` to appear (synced from the other machine).
-3. Run the link commands below — they replace `~/.claude/*` with links into the Drive-synced repo.
-
-**Windows (PowerShell, no admin needed):**
 ```powershell
-$repo = "$HOME\My Drive\claude-brain\claude-skills"
-
-# Backup existing files (non-destructive)
-Move-Item $HOME\.claude\CLAUDE.md     $HOME\.claude\CLAUDE.md.bak -ErrorAction SilentlyContinue
-Move-Item $HOME\.claude\inspectors    $HOME\.claude\inspectors.bak -ErrorAction SilentlyContinue
-Move-Item $HOME\.claude\skills        $HOME\.claude\skills.bak -ErrorAction SilentlyContinue
-Move-Item $HOME\.claude\settings.json $HOME\.claude\settings.json.bak -ErrorAction SilentlyContinue
-
-# Hardlinks for files, junctions for directories
-New-Item -ItemType HardLink -Path "$HOME\.claude\CLAUDE.md"              -Target "$repo\CLAUDE.md"
-New-Item -ItemType HardLink -Path "$HOME\.claude\settings.json"          -Target "$repo\settings.json"
-New-Item -ItemType HardLink -Path "$HOME\.claude\statusline-command.sh"  -Target "$repo\statusline-command.sh"
-New-Item -ItemType Junction -Path "$HOME\.claude\inspectors"             -Target "$repo\inspectors"
-New-Item -ItemType Junction -Path "$HOME\.claude\skills"                 -Target "$repo\skills"
-
-# Optional: convenience junction so documented path ~/claude-skills works
-New-Item -ItemType Junction -Path "$HOME\claude-skills" -Target "$repo"
-
-# Machine identity for git commits (use Ron-PC or Ron-ACER)
-git config --global user.name "RonShmuely (Ron-ACER)"
-
-# Per-project memory junctions.
-# The .claude/projects/ folder name is derived from the project's absolute path
-# (Windows slashes → dashes). Adjust "ronsh" below if laptop username differs.
-$user = "ronsh"
-New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop\memory"              -Target "$repo\project-memory\desktop"
-New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop-WeldingRef\memory"   -Target "$repo\project-memory\weldingref"
-New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop-GarageInfo\memory"   -Target "$repo\project-memory\garageinfo"
-New-Item -ItemType Junction -Path "$HOME\.claude\projects\C--Users-$user-Desktop-VoiceLayerAPP\memory" -Target "$repo\project-memory\voicelayerapp"
-# (each parent folder is auto-created by Claude Code on first project session; create it manually with New-Item -ItemType Directory if needed)
+# Windows
+git clone https://github.com/RonShmuely/claude-skills "$env:USERPROFILE\Desktop\claude-skills"
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\machine-diagnose" `
+                            -Target "$env:USERPROFILE\Desktop\claude-skills\skills\machine-diagnose"
 ```
 
-**macOS / Linux:**
 ```bash
-repo="$HOME/Google Drive/My Drive/claude-brain/claude-skills"   # may differ on Mac
-
-mv ~/.claude/CLAUDE.md      ~/.claude/CLAUDE.md.bak 2>/dev/null
-mv ~/.claude/inspectors     ~/.claude/inspectors.bak 2>/dev/null
-mv ~/.claude/skills         ~/.claude/skills.bak 2>/dev/null
-mv ~/.claude/settings.json  ~/.claude/settings.json.bak 2>/dev/null
-
-ln -s "$repo/CLAUDE.md"     ~/.claude/CLAUDE.md
-ln -s "$repo/settings.json" ~/.claude/settings.json
-ln -s "$repo/inspectors"    ~/.claude/inspectors
-ln -s "$repo/skills"        ~/.claude/skills
+# macOS / Linux
+git clone https://github.com/RonShmuely/claude-skills ~/Desktop/claude-skills
+ln -s ~/Desktop/claude-skills/skills/machine-diagnose ~/.claude/skills/machine-diagnose
 ```
 
-Restart Claude Code — skills, inspectors, and preferences all load from the Drive-synced repo.
+Or symlink/junction the entire `skills/` and `inspectors/` directories at once.
 
-### Fallback path: git only (no cloud folder)
-```bash
-git clone https://github.com/RonShmuely/claude-skills.git ~/claude-skills
-# then apply the same links as above, with $repo = ~/claude-skills
-# manual: git pull after sitting down at a machine, git push after every edit
+### Drift guard
+
+If you sync this repo across machines, enable the pre-commit drift check so concurrent edits don't silently overwrite each other:
+
+```
+git config core.hooksPath .githooks
 ```
 
----
-
-## Sync model
-
-- **Drive** handles real-time bidirectional file sync between machines (seconds to a few minutes).
-- **Git** runs on top for version history and rollback. Commit + push from either machine — the other machine's Drive catches up, and `git pull` there picks up the commit metadata.
-- **Machine identity** is baked into git commits as `RonShmuely (Ron-PC)` or `RonShmuely (Ron-ACER)` so you can trace which machine made which change.
-- **Conflicts** are rare in single-user two-machine setups. When they happen, Drive creates a `(conflicted copy)` file labeled with the source machine name.
+The hook refuses commits when the local branch is behind upstream and tells you to `git pull --ff-only` first.
 
 ---
 
 ## Requirements
 
-- `machine-diagnose`, `wrap-up`, `notebooklm` skills use [`notebooklm-mcp`](https://github.com/teng-lin/notebooklm-py) via MCP server.
-- `web-cowork` uses Playwright MCP + Python 3.
-- `pcusage` uses PowerShell (Windows-only).
+- **Claude Code** 1.x or later
+- **NotebookLM MCP** for `machine-diagnose`, `wrapup`, `notebooklm` — install via `pip install notebooklm-mcp` and configure in `~/.claude/mcp.json`
+- **Playwright MCP** for `web-cowork`
+- **Python 3.11+** for `swarm-orchestrator` dashboard, `notebooklm`, `pcusage` (Windows only for pcusage)
 
 ---
 
-## Author
+## License
 
-[RonShmuely](https://github.com/RonShmuely)
+MIT — see [LICENSE](LICENSE). Use, fork, modify, redistribute. If a skill saves you time, a star is appreciated.
+
+## Contributing
+
+PRs welcome. Each skill should be self-contained with its own `SKILL.md` (Anthropic skill format). For new inspectors, follow the existing `Role / Operating Principles / Behavior / Output Format / Hard Rules` layout.

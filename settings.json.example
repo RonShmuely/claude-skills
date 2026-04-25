@@ -1,0 +1,32 @@
+{
+  "_comment": "Example Claude Code settings. Copy to ~/.claude/settings.json and adjust paths/preferences. Real settings should live in a private config repo, not this public one.",
+
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"<path-to>/statusline-command.sh\"",
+    "padding": 0
+  },
+
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[System.Media.SystemSounds]::Exclamation.Play()",
+            "shell": "powershell",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+
+  "enabledPlugins": {
+    "playwright@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true
+  },
+
+  "autoUpdatesChannel": "latest",
+  "model": "opus"
+}

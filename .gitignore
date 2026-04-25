@@ -1,20 +1,46 @@
+# Auth + secrets — NEVER commit
 *.env
+.credentials.json
+*-credentials.json
+secrets.json
+*credentials.local.*
+
+# Personal config and memory belong in the private claude-brain repo
+CLAUDE.md
+settings.json
+settings.local.json
+project-memory/
+skills/find-part/
+
+# JSON config: deny all by default, allowlist below
 *.json
-!settings.json
+!*.example
 !package.json
 !package-lock.json
 !skills/swarm-orchestrator/defaults.json
+
+# Build / runtime artifacts
 __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Per-machine local stuff
+shell-snapshots/
+.cache/
+*.jsonl
 
 # Machine-local skills (not synced across machines)
 skills/stencil-studio/
 skills/supabase
 skills/supabase-postgres-best-practices
 
-# Swarm dashboard runtime artifacts (local to each machine)
+# Swarm dashboard runtime artifacts
 skills/swarm-orchestrator/dashboard/swarm.log
 skills/swarm-orchestrator/dashboard/mockups/
+skills/swarm-orchestrator/dashboard/static/.runtime/
 
+# Swarm dashboard moved to packages/ in v2 — keep runtime artifacts out
+packages/swarm-dashboard/swarm.log
+packages/swarm-dashboard/mockups/
+packages/swarm-dashboard/static/.runtime/

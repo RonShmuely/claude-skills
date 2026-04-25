@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MOCKUP · Cockpit Redesign — Swarm Orchestrator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='13' y='7' width='6' height='18' fill='%23e10600'/%3E%3C/svg%3E" />
+<style>
+/* ============================================================
+   DESIGN TOKENS — Theater palette
+   ============================================================ */
+:root {
+  --crimson:      #E10600;
+  --crimson-hot:  #FF3A30;
+  --crimson-dim:  #5A0200;
+  --crimson-deep: #2A0100;
+  --black:        #000000;
+  --ink:          #0A0A0A;
+  --glass:        rgba(10,10,10,0.92);
+  --glass-border: var(--crimson-deep);
+  --glass-run:    var(--crimson);
+}
+
+/* ============================================================
+   RESET + BASE
+   ============================================================ */
+* { box-sizing: border-box; }
+html, body {
+  height: 100%; width: 100%; margin: 0; padding: 0;
+  background: var(--black);
+  color: #e8e8e8;
+  font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif;
+  overflow: hidden;
+}
+.mono { font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace; }
+
+/* ============================================================
+   VIGNETTE STAGE BACKGROUND
+   ============================================================ */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse 120% 80% at center, rgba(225,6,0,0.07) 0%, rgba(225,6,0,0) 55%),
+    radial-gradient(ellipse at center, #060606 0%, #000 90%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ============================================================
+   MOCKUP BANNER
+   ============================================================ */
+.mockup-banner {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 28px;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(225,6,0,0.15) 0px,
+    rgba(225,6,0,0.15) 6px,
+    rgba(0,0,0,0.4) 6px,
+    rgba(0,0,0,0.4) 12px
+  );
+  border-bottom: 1px solid var(--crimson-dim);
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  z-index: 100;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase;
+  color: var(--crimson-hot); text-shadow: 0 0 8px rgba(225,6,0,.7);
+}
+.mockup-banner .sep { color: #444; }
+.mockup-banner .dim { color: #555; letter-spacing: 0.18em; }
+
+/* ============================================================
+   TOP HUD BAR
+   ============================================================ */
+.topbar {
+  position: fixed; top: 28px; left: 0; right: 0;
+  height: 36px;
+  padding: 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  z-index: 50;
+  border-bottom: 1px solid rgba(225,6,0,0.12);
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+}
+.topbar .l { color: var(--crimson-hot); text-shadow: 0 0 8px rgba(225,6,0,.6); display: flex; align-items: center; gap: 12px; }
+.topbar .r { color: #555; display: flex; align-items: center; gap: 8px; }
+.topbar .r .live-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--crimson); box-shadow: 0 0 8px rgba(225,6,0,.8);
+  animation: sse-pulse 1.8s ease-in-out infinite;
+}
+@keyframes sse-pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+.route-nav { display: inline-flex; gap: 4px; align-items: center; font-size: 9px; letter-spacing: 0.12em; color: #555; }
+.route-nav a { color: #777; text-decoration: none; padding: 2px 7px; border-radius: 2px; transition: color .15s, background .15s; }
+.route-nav a:hover { color: #ddd; background: rgba(255,255,255,.04); }
+.route-nav a.current { color: var(--crimson); background: rgba(225,6,0,.10); }
+.route-nav .sep { color: #2a2a2a; }
+
+/* ============================================================
+   COCKPIT GRID
+   ============================================================ */
+.cockpit {
+  position: relative; z-index: 1;
+  display: grid;
+  height: 100vh;
+  padding: 76px 18px 18px 18px;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 230px 1fr 120px;
+  grid-template-areas:
+    "tasks roster stats"
+    "balance ticker ticker"
+    "strip  strip  strip";
+}
+
+/* ============================================================
+   GLASS PANEL BASE — Theater dark-glass treatment
+   ============================================================ */
+.panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  position: relative;
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.03),
+    0 0 40px rgba(0,0,0,.5),
+    0 2px 8px rgba(0,0,0,.4);
+  overflow: hidden;
+  animation: card-enter .45s cubic-bezier(.2,.8,.3,1.2) both;
+}
+.panel:nth-child(1) { animation-delay: .05s; }
+.panel:nth-child(2) { animation-delay: .10s; }
+.panel:nth-child(3) { animation-delay: .15s; }
+.panel:nth-child(4) { animation-delay: .20s; }
+.panel:nth-child(5) { animation-delay: .25s; }
+.panel:nth-child(6) { animation-delay: .30s; }
+
+@keyframes card-enter {
+  from { opacity: 0; transform: scale(.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0); }
+}
+
+/* Panel label row */
+.panel-label {
+  position: absolute; top: 10px; left: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 0.30em; text-transform: uppercase;
+  color: #555; font-weight: 700;
+  pointer-events: none;
+}
+.panel-sub {
+  position: absolute; top: 10px; right: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--crimson-hot);
+  text-shadow: 0 0 6px rgba(225,6,0,.5);
+}
+
+/* Crimson accent line at top of each panel */
+.panel::after {
+  content: '';
+  position: absolute; top: 0; left: 12px; right: 12px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--crimson-deep) 30%, var(--crimson-deep) 70%, transparent);
+  pointer-events: none;
+}
+
+/* Grid areas */
+.tasks-panel   { grid-area: tasks; }
+.roster-panel  { grid-area: roster; }
+.stats-panel   { grid-area: stats; }
+.balance-panel { grid-area: balance; }
+.ticker-panel  { grid-area: ticker; }
+.strip-panel   { grid-area: strip; }
+
+/* ============================================================
+   THEATER COMPONENT LIBRARY
+   (tag, callsign, safety, conf, dot — verbatim from theater.html)
+   ============================================================ */
+
+/* Status dot */
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot.running {
+  background: var(--crimson);
+  box-shadow: 0 0 10px rgba(225,6,0,.9);
+  animation: dot-pulse 1.1s ease-in-out infinite;
+}
+.dot.done    { background: #444; }
+.dot.idle    { background: #333; }
+@keyframes dot-pulse {
+  0%,100% { transform: scale(1);   opacity: 1; }
+  50%     { transform: scale(1.6); opacity: .4; }
+}
+
+/* Model tag chip */
+.tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; padding: 2px 6px; border-radius: 4px; border: 1px solid;
+  text-transform: uppercase; letter-spacing: 0.14em;
+}
+.tag.opus    { color: #ffa6e5; border-color: #c050a0; background: rgba(120,40,90,.2); }
+.tag.sonnet  { color: #a0c8ff; border-color: #5080c0; background: rgba(40,70,120,.2); }
+.tag.haiku   { color: #a0e5c0; border-color: #50a080; background: rgba(40,100,70,.2); }
+.tag.unknown { color: #999;    border-color: #333;   background: rgba(30,30,30,.2); }
+
+/* Callsign pill */
+.callsign {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 18px; padding: 0 7px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid; color: #fff; white-space: nowrap;
+}
+.callsign.sm { height: 16px; font-size: 9px; padding: 0 5px; }
+.callsign.opus     { background: rgba(200,90,168,.3); border-color: #d080c0; }
+.callsign.sonnet   { background: rgba(90,136,208,.3); border-color: #80a0e0; }
+.callsign.haiku    { background: rgba(90,176,136,.3); border-color: #80c0a0; }
+.callsign.reviewer { background: var(--crimson); border-color: var(--crimson-hot); box-shadow: 0 0 10px rgba(225,6,0,.6); }
+
+/* Safety pill — border-only, no fill */
+.safety {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; padding: 2px 5px; border-radius: 3px;
+  border: 1px solid; font-weight: 800;
+}
+.safety.H { color: var(--crimson-hot); border-color: var(--crimson); }
+.safety.M { color: #ffc870; border-color: #906000; }
+.safety.L { color: #999; border-color: #333; }
+
+/* Confidence pill */
+.conf {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; padding: 2px 5px; border-radius: 3px;
+  border: 1px solid;
+}
+.conf.good { color: #a0ffc0; border-color: #208050; }
+.conf.meh  { color: #ffc870; border-color: #906020; }
+.conf.bad  { color: var(--crimson-hot); border-color: var(--crimson); }
+
+/* ============================================================
+   TASKS PANEL
+   ============================================================ */
+.tasks-inside {
+  position: absolute; inset: 32px 12px 12px 12px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.task-row {
+  background: rgba(6,6,6,0.8);
+  border: 1px solid var(--crimson-deep);
+  border-radius: 6px; padding: 6px 9px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.task-row.running {
+  border-color: var(--crimson);
+  box-shadow: 0 0 18px rgba(225,6,0,.25), inset 0 0 0 1px rgba(225,6,0,.05);
+}
+.task-head { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; cursor: pointer; }
+.task-chev { color: var(--crimson-hot); font-size: 9px; transition: transform .2s; width: 8px; }
+.task-row.expanded .task-chev { transform: rotate(90deg); }
+.task-name {
+  font-size: 11px; color: #fff; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1; min-width: 0;
+}
+.task-pill {
+  font-family: 'JetBrains Mono', monospace; font-size: 9px;
+  padding: 1px 5px; border-radius: 2px;
+  background: rgba(20,20,20,.8); border: 1px solid #1f1f1f; color: #888;
+}
+.task-pill.done { color: #80e0a0; border-color: #205040; }
+.task-cost { color: #ddd; font-weight: 600; }
+.task-agents { max-height: 0; overflow: hidden; transition: max-height .3s ease; }
+.task-row.expanded .task-agents { max-height: 100px; margin-top: 6px; }
+.cs-strip { display: flex; flex-wrap: wrap; gap: 3px; padding-left: 14px; }
+
+/* ============================================================
+   ROSTER PANEL
+   ============================================================ */
+.roster-inside {
+  position: absolute; inset: 32px 12px 12px 12px;
+  overflow-y: auto; display: flex; flex-direction: column; gap: 1px;
+}
+.roster-row {
+  display: grid; grid-template-columns: 10px 86px 18px 1fr auto;
+  gap: 7px; align-items: center;
+  padding: 4px 6px; border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  transition: background .12s;
+}
+.roster-row:hover { background: rgba(255,255,255,.025); }
+.rdesc {
+  color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 11px;
+}
+.rtool  { color: var(--crimson-hot); justify-self: end; font-size: 10px; animation: pulse-op 1.4s ease-in-out infinite; }
+.rstat  { color: #555; justify-self: end; font-size: 10px; }
+.roster-row.running .rstat { color: var(--crimson-hot); }
+@keyframes pulse-op { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+/* ============================================================
+   SESSION STATS PANEL — 3×2 big-number grid
+   ============================================================ */
+.stats-grid {
+  position: absolute; inset: 32px 10px 10px 10px;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 5px;
+}
+.stat {
+  background: rgba(6,6,6,.85); border: 1px solid var(--crimson-deep); border-radius: 6px;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 5px 10px; transition: border-color .2s, box-shadow .2s;
+}
+.stat:hover { border-color: var(--crimson-dim); box-shadow: 0 0 10px rgba(225,6,0,.1); }
+.stat-v {
+  font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700;
+  color: #fff; line-height: 1;
+  text-shadow: 0 0 14px rgba(225,6,0,.3);
+}
+.stat-v .hot { color: var(--crimson); }
+.stat-v .stat-s { font-size: 15px; color: #777; margin-left: 2px; }
+.stat-l { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #555; margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+/* Running stat breathes */
+.stat.active .stat-v { animation: counter-breathe 2.2s ease-in-out infinite; }
+@keyframes counter-breathe {
+  0%,100% { text-shadow: 0 0 12px rgba(225,6,0,.3); }
+  50%     { text-shadow: 0 0 24px rgba(225,6,0,.7); }
+}
+
+/* ============================================================
+   SWARM BALANCE PANEL — stacked bars
+   ============================================================ */
+.balance-core {
+  position: absolute; inset: 32px 16px 14px 16px;
+  display: flex; flex-direction: column; gap: 11px; overflow-y: auto;
+}
+.stack-block { display: flex; flex-direction: column; gap: 4px; }
+.stack-hdr { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.meter-label {
+  color: #666; letter-spacing: 0.18em; text-transform: uppercase;
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+}
+.stack-total {
+  font-family: 'JetBrains Mono', monospace; font-size: 22px; color: #fff;
+  font-weight: 700; line-height: 1; text-shadow: 0 0 12px rgba(225,6,0,.2);
+}
+.att-stack {
+  display: flex; height: 13px; border-radius: 3px; overflow: hidden;
+  border: 1px solid rgba(225,6,0,.15);
+}
+.stack-opus   { background: rgba(160,60,140,.75); }
+.stack-sonnet { background: rgba(60,120,200,.75); }
+.stack-haiku  { background: rgba(60,160,120,.75); }
+.stack-L      { background: rgba(100,100,100,.55); }
+.stack-M      { background: rgba(200,140,40,.70); }
+.stack-H      { background: rgba(225,6,0,.75); }
+.stack-legend { display: flex; gap: 14px; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #777; }
+.stack-legend span::before { content: '■ '; }
+.stack-legend .opus::before   { color: #d080c0; }
+.stack-legend .sonnet::before { color: #80a0e0; }
+.stack-legend .haiku::before  { color: #80c0a0; }
+.stack-legend .low::before    { color: #888; }
+.stack-legend .medium::before { color: #ffc870; }
+.stack-legend .high::before   { color: var(--crimson-hot); }
+
+/* ============================================================
+   TOOL-CALL TAPE PANEL
+   ============================================================ */
+.tape-wrap {
+  position: absolute; inset: 30px 14px 14px 14px;
+  background: rgba(0,0,0,.7); border-radius: 6px;
+  border: 1px solid rgba(225,6,0,.1);
+  padding: 8px 10px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 0;
+}
+.tape-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; line-height: 1.75;
+  white-space: nowrap; color: #999;
+  animation: tape-in .3s ease both;
+}
+.tape-line .ts   { color: #444; margin-right: 10px; }
+.tape-line .tool { color: var(--crimson-hot); }
+.tape-line .arg  { color: #777; }
+@keyframes tape-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* Staggered delays so lines appear sequentially on load */
+.tape-line:nth-child(1)  { animation-delay: .05s; }
+.tape-line:nth-child(2)  { animation-delay: .10s; }
+.tape-line:nth-child(3)  { animation-delay: .15s; }
+.tape-line:nth-child(4)  { animation-delay: .20s; }
+.tape-line:nth-child(5)  { animation-delay: .25s; }
+.tape-line:nth-child(6)  { animation-delay: .30s; }
+.tape-line:nth-child(7)  { animation-delay: .35s; }
+.tape-line:nth-child(8)  { animation-delay: .40s; }
+.tape-line:nth-child(9)  { animation-delay: .45s; }
+.tape-line:nth-child(10) { animation-delay: .50s; }
+.tape-line:nth-child(11) { animation-delay: .55s; }
+.tape-line:nth-child(12) { animation-delay: .60s; }
+.tape-line:nth-child(13) { animation-delay: .65s; }
+.tape-line:nth-child(14) { animation-delay: .70s; }
+.tape-line:nth-child(15) { animation-delay: .75s; }
+
+/* ============================================================
+   PILOT LIGHTS STRIP
+   ============================================================ */
+.strip-inner {
+  position: absolute; inset: 28px 14px 14px 14px;
+  display: flex; gap: 8px; align-items: stretch;
+}
+.lamp {
+  flex: 1 1 0; min-width: 0;
+  background: rgba(6,6,6,.85); border: 1px solid var(--crimson-deep);
+  border-radius: 8px; padding: 9px 11px;
+  display: flex; flex-direction: column; gap: 5px;
+  position: relative; overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+  animation: card-enter .5s cubic-bezier(.2,.8,.3,1.2) both;
+}
+.lamp:nth-child(1) { animation-delay: .35s; }
+.lamp:nth-child(2) { animation-delay: .40s; }
+.lamp:nth-child(3) { animation-delay: .45s; }
+.lamp:nth-child(4) { animation-delay: .50s; }
+.lamp:nth-child(5) { animation-delay: .55s; }
+.lamp:nth-child(6) { animation-delay: .60s; }
+.lamp:nth-child(7) { animation-delay: .65s; }
+.lamp:nth-child(8) { animation-delay: .70s; }
+
+.lamp.running {
+  border-color: var(--crimson);
+  box-shadow: 0 0 20px rgba(225,6,0,.35);
+}
+.lamp.done { border-color: rgba(225,6,0,.3); }
+
+.lamp-top { display: flex; align-items: center; gap: 6px; }
+.lamp-desc {
+  font-size: 10px; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; font-family: -apple-system, 'Segoe UI', sans-serif;
+}
+.lamp-stat {
+  font-size: 9px; color: #555; margin-top: auto;
+  font-family: 'JetBrains Mono', monospace;
+}
+.lamp-conf {
+  position: absolute; top: 7px; right: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+}
+
+/* ============================================================
+   CONNECTOR ACCENT — subtle SVG line between ticker header
+   and tasks panel (cosmetic only, from theater arc spirit)
+   ============================================================ */
+.arc-connector {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+}
+.arc-connector path {
+  fill: none; stroke: var(--crimson-deep); stroke-width: 1;
+  stroke-dasharray: 3 7; opacity: .4;
+  animation: dash-run 3s linear infinite;
+}
+@keyframes dash-run { to { stroke-dashoffset: -80; } }
+
+/* ============================================================
+   SCROLLBARS
+   ============================================================ */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--crimson-deep); }
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ── MOCKUP BANNER ───────────────────────────────────────── -->
+<div class="mockup-banner">
+  <span>MOCKUP</span>
+  <span class="sep">·</span>
+  <span>COCKPIT REDESIGN</span>
+  <span class="sep">·</span>
+  <span class="dim">NOT CANONICAL · STATIC PLACEHOLDER DATA · 2026-04-24</span>
+</div>
+
+<!-- ── TOP HUD ─────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="l">
+    <span>▮ COCKPIT · SWARM OPS</span>
+    <nav class="route-nav">
+      <a href="#">dash</a>
+      <span class="sep">·</span>
+      <a href="#">theater</a>
+      <span class="sep">·</span>
+      <a href="#" class="current">cockpit</a>
+    </nav>
+  </div>
+  <div class="r">
+    <span>swarm-orchestrator</span>
+    <span class="live-dot"></span>
+    <span>live</span>
+  </div>
+</div>
+
+<!-- ── COCKPIT GRID ────────────────────────────────────────── -->
+<div class="cockpit">
+
+  <!-- ══════════════════════════════════════
+       PANEL 1: TASKS
+       ══════════════════════════════════════ -->
+  <section class="panel tasks-panel">
+    <div class="panel-label">tasks</div>
+    <div class="panel-sub">5 · 11 agents</div>
+    <div class="tasks-inside" id="tasks-inside">
+
+      <!-- Task 1: RUNNING -->
+      <div class="task-row running expanded">
+        <div class="task-head" onclick="this.closest('.task-row').classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="dot running"></div>
+          <span class="task-name">cockpit-theater redesign</span>
+          <span class="safety H">H</span>
+          <span class="task-pill">1/1</span>
+          <span class="task-pill">4m 12s</span>
+          <span class="task-pill task-cost">$0.82</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm sonnet">sonnet2</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task 2: RUNNING -->
+      <div class="task-row running expanded">
+        <div class="task-head" onclick="this.closest('.task-row').classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="dot running"></div>
+          <span class="task-name">theater.html fixes</span>
+          <span class="safety M">M</span>
+          <span class="task-pill">2/3</span>
+          <span class="task-pill">6m 48s</span>
+          <span class="task-pill task-cost">$1.14</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku">haiku</span>
+            <span class="callsign sm haiku">haiku2</span>
+            <span class="callsign sm reviewer">R·sonnet3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task 3: DONE -->
+      <div class="task-row">
+        <div class="task-head" onclick="this.closest('.task-row').classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="dot done"></div>
+          <span class="task-name">index.html fixes</span>
+          <span class="safety L">L</span>
+          <span class="task-pill done">3/3</span>
+          <span class="task-pill">3m 05s</span>
+          <span class="task-pill task-cost">$0.61</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku">haiku3</span>
+            <span class="callsign sm haiku">haiku4</span>
+            <span class="callsign sm sonnet">sonnet</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task 4: DONE -->
+      <div class="task-row">
+        <div class="task-head" onclick="this.closest('.task-row').classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="dot done"></div>
+          <span class="task-name">pins backend</span>
+          <span class="safety L">L</span>
+          <span class="task-pill done">2/2</span>
+          <span class="task-pill">2m 38s</span>
+          <span class="task-pill task-cost">$0.50</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku">haiku5</span>
+            <span class="callsign sm sonnet">sonnet3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Task 5: DONE -->
+      <div class="task-row">
+        <div class="task-head" onclick="this.closest('.task-row').classList.toggle('expanded')">
+          <span class="task-chev">›</span>
+          <div class="dot done"></div>
+          <span class="task-name">cockpit.html fixes</span>
+          <span class="safety L">L</span>
+          <span class="task-pill done">2/2</span>
+          <span class="task-pill">1m 52s</span>
+          <span class="task-pill task-cost">$0.35</span>
+        </div>
+        <div class="task-agents">
+          <div class="cs-strip">
+            <span class="callsign sm haiku">haiku6</span>
+            <span class="callsign sm haiku">haiku7</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       PANEL 2: AGENT ROSTER
+       ══════════════════════════════════════ -->
+  <section class="panel roster-panel">
+    <div class="panel-label">agent roster</div>
+    <div class="panel-sub">3 running · 11 total</div>
+    <div class="roster-inside">
+
+      <!-- Running agents first -->
+      <div class="roster-row running">
+        <div class="dot running"></div>
+        <span class="callsign sm sonnet">sonnet2</span>
+        <span class="safety H">H</span>
+        <span class="rdesc">cockpit-theater redesign mockup</span>
+        <span class="rtool">→ Write</span>
+      </div>
+      <div class="roster-row running">
+        <div class="dot running"></div>
+        <span class="callsign sm haiku">haiku</span>
+        <span class="safety M">M</span>
+        <span class="rdesc">fix theater arc animation offsets</span>
+        <span class="rtool">→ Edit</span>
+      </div>
+      <div class="roster-row running">
+        <div class="dot running"></div>
+        <span class="callsign sm reviewer">R·sonnet3</span>
+        <span class="safety M">M</span>
+        <span class="rdesc">review theater.html agent card layout</span>
+        <span class="rtool">→ Read</span>
+      </div>
+
+      <!-- Done agents -->
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm haiku">haiku2</span>
+        <span class="safety M">M</span>
+        <span class="rdesc">fix theater panel label positioning</span>
+        <span class="rstat">✓ 97% · 18 tools · 1m 22s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm haiku">haiku3</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">fix index.html nav link hrefs</span>
+        <span class="rstat">✓ 95% · 12 tools · 58s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm haiku">haiku4</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">fix index.html SSE reconnect logic</span>
+        <span class="rstat">✓ 92% · 16 tools · 1m 10s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm sonnet">sonnet</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">refactor index.html agent list renderer</span>
+        <span class="rstat">✓ 90% · 24 tools · 55s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm haiku">haiku5</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">implement pins.json write endpoint</span>
+        <span class="rstat">✓ 65% · 31 tools · 1m 48s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm sonnet">sonnet3</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">add pin persistence to app.py</span>
+        <span class="rstat">✓ 94% · 20 tools · 50s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm haiku">haiku6</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">fix cockpit panel grid overflow</span>
+        <span class="rstat">✓ 96% · 14 tools · 48s</span>
+      </div>
+      <div class="roster-row done">
+        <div class="dot done"></div>
+        <span class="callsign sm haiku">haiku7</span>
+        <span class="safety L">L</span>
+        <span class="rdesc">fix cockpit balance bar proportions</span>
+        <span class="rstat">✓ 93% · 11 tools · 1m 04s</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       PANEL 3: SESSION STATS
+       ══════════════════════════════════════ -->
+  <section class="panel stats-panel">
+    <div class="panel-label">session stats</div>
+    <div class="panel-sub">live</div>
+    <div class="stats-grid">
+
+      <div class="stat">
+        <div class="stat-v">0.91</div>
+        <div class="stat-l">avg confidence</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">$3.42</div>
+        <div class="stat-l">spend (session)</div>
+      </div>
+      <div class="stat active">
+        <div class="stat-v"><span class="hot">3</span>/11</div>
+        <div class="stat-l">running / total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">4.2<span class="stat-s">×</span></div>
+        <div class="stat-l">parallel factor</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">207</div>
+        <div class="stat-l">tool calls</div>
+      </div>
+      <div class="stat">
+        <div class="stat-v">1</div>
+        <div class="stat-l">escalations</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       PANEL 4: SWARM BALANCE
+       ══════════════════════════════════════ -->
+  <section class="panel balance-panel">
+    <div class="panel-label">swarm balance</div>
+    <div class="panel-sub">distributions</div>
+    <div class="balance-core">
+
+      <!-- By tier count -->
+      <div class="stack-block">
+        <div class="stack-hdr">
+          <span class="meter-label">by tier · count</span>
+          <span class="stack-total">11 agents</span>
+        </div>
+        <div class="att-stack">
+          <div class="stack-opus"   style="flex: 0.001;"></div>
+          <div class="stack-sonnet" style="flex: 4;"></div>
+          <div class="stack-haiku"  style="flex: 7;"></div>
+        </div>
+        <div class="stack-legend">
+          <span class="opus">opus 0</span>
+          <span class="sonnet">sonnet 4</span>
+          <span class="haiku">haiku 7</span>
+        </div>
+      </div>
+
+      <!-- By tier spend -->
+      <div class="stack-block">
+        <div class="stack-hdr">
+          <span class="meter-label">by tier · spend</span>
+          <span class="stack-total">$3.42</span>
+        </div>
+        <div class="att-stack">
+          <div class="stack-opus"   style="flex: 0.001;"></div>
+          <div class="stack-sonnet" style="flex: 2.56;"></div>
+          <div class="stack-haiku"  style="flex: 0.86;"></div>
+        </div>
+        <div class="stack-legend">
+          <span class="opus">opus 0%</span>
+          <span class="sonnet">sonnet 75%</span>
+          <span class="haiku">haiku 25%</span>
+        </div>
+      </div>
+
+      <!-- By safety -->
+      <div class="stack-block">
+        <div class="stack-hdr">
+          <span class="meter-label">by safety</span>
+          <span class="stack-total">11 agents</span>
+        </div>
+        <div class="att-stack">
+          <div class="stack-L" style="flex: 8;"></div>
+          <div class="stack-M" style="flex: 2;"></div>
+          <div class="stack-H" style="flex: 1;"></div>
+        </div>
+        <div class="stack-legend">
+          <span class="low">[L] 8</span>
+          <span class="medium">[M] 2</span>
+          <span class="high">[H] 1</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       PANEL 5: TOOL-CALL TAPE
+       ══════════════════════════════════════ -->
+  <section class="panel ticker-panel">
+    <div class="panel-label">tool-call tape</div>
+    <div class="panel-sub">rolling · last 15</div>
+    <div class="tape-wrap">
+      <div class="tape-line"><span class="ts">14:23:51</span><span class="tag sonnet">sonnet2</span> <span class="tool">Write</span>  <span class="arg">/dashboard/mockups/cockpit-theater-redesign.html</span></div>
+      <div class="tape-line"><span class="ts">14:23:44</span><span class="tag haiku">haiku</span> <span class="tool">Edit</span>  <span class="arg">theater.html · .arc.running stroke-dashoffset fix</span></div>
+      <div class="tape-line"><span class="ts">14:23:38</span><span class="tag reviewer">R·sonnet3</span> <span class="tool">Read</span>  <span class="arg">theater.html · lines 120-165</span></div>
+      <div class="tape-line"><span class="ts">14:23:31</span><span class="tag sonnet">sonnet2</span> <span class="tool">Read</span>  <span class="arg">cockpit.html · full file</span></div>
+      <div class="tape-line"><span class="ts">14:23:25</span><span class="tag haiku">haiku</span> <span class="tool">Grep</span>  <span class="arg">pattern: "arc.running" path: templates/</span></div>
+      <div class="tape-line"><span class="ts">14:23:18</span><span class="tag reviewer">R·sonnet3</span> <span class="tool">Bash</span>  <span class="arg">ls /dashboard/templates/</span></div>
+      <div class="tape-line"><span class="ts">14:23:11</span><span class="tag haiku">haiku2</span> <span class="tool">Edit</span>  <span class="arg">theater.html · .brain-label bottom offset</span></div>
+      <div class="tape-line"><span class="ts">14:22:59</span><span class="tag sonnet">sonnet3</span> <span class="tool">Bash</span>  <span class="arg">python app.py --test-pins</span></div>
+      <div class="tape-line"><span class="ts">14:22:52</span><span class="tag haiku">haiku5</span> <span class="tool">Write</span>  <span class="arg">app.py · add /api/pin POST handler</span></div>
+      <div class="tape-line"><span class="ts">14:22:46</span><span class="tag haiku">haiku3</span> <span class="tool">Edit</span>  <span class="arg">index.html · fix nav a[href="#cockpit"]</span></div>
+      <div class="tape-line"><span class="ts">14:22:39</span><span class="tag haiku">haiku4</span> <span class="tool">Edit</span>  <span class="arg">index.html · SSE onclose reconnect delay</span></div>
+      <div class="tape-line"><span class="ts">14:22:33</span><span class="tag sonnet">sonnet</span> <span class="tool">Read</span>  <span class="arg">index.html · lines 280-340</span></div>
+      <div class="tape-line"><span class="ts">14:22:28</span><span class="tag haiku">haiku6</span> <span class="tool">Edit</span>  <span class="arg">cockpit.html · .balance-panel grid-area overflow</span></div>
+      <div class="tape-line"><span class="ts">14:22:21</span><span class="tag haiku">haiku7</span> <span class="tool">Grep</span>  <span class="arg">pattern: "flex:" path: cockpit.html</span></div>
+      <div class="tape-line"><span class="ts">14:22:15</span><span class="tag haiku">haiku5</span> <span class="tool">Bash</span>  <span class="arg">cat pins.json | python -m json.tool</span></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════
+       PANEL 6: PILOT LIGHTS
+       ══════════════════════════════════════ -->
+  <section class="panel strip-panel">
+    <div class="panel-label">active agents · pilot lights</div>
+    <div class="panel-sub">recent: 8</div>
+    <div class="strip-inner">
+
+      <div class="lamp running">
+        <div class="lamp-top"><div class="dot running"></div><span class="callsign sm sonnet">sonnet2</span></div>
+        <div class="lamp-desc">cockpit-theater redesign</div>
+        <div class="lamp-stat">89 tools · 4m 12s</div>
+        <div class="lamp-conf conf good">97%</div>
+      </div>
+
+      <div class="lamp running">
+        <div class="lamp-top"><div class="dot running"></div><span class="callsign sm haiku">haiku</span></div>
+        <div class="lamp-desc">theater arc fixes</div>
+        <div class="lamp-stat">18 tools · 6m 48s</div>
+        <div class="lamp-conf conf good">92%</div>
+      </div>
+
+      <div class="lamp running">
+        <div class="lamp-top"><div class="dot running"></div><span class="callsign sm reviewer">R·sonnet3</span></div>
+        <div class="lamp-desc">review agent card layout</div>
+        <div class="lamp-stat">12 tools · 3m 05s</div>
+        <div class="lamp-conf conf good">96%</div>
+      </div>
+
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot done"></div><span class="callsign sm haiku">haiku2</span></div>
+        <div class="lamp-desc">theater panel labels</div>
+        <div class="lamp-stat">18 tools · 1m 22s</div>
+        <div class="lamp-conf conf good">97%</div>
+      </div>
+
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot done"></div><span class="callsign sm haiku">haiku5</span></div>
+        <div class="lamp-desc">pins.json write endpoint</div>
+        <div class="lamp-stat">31 tools · 1m 48s</div>
+        <div class="lamp-conf conf bad">65%</div>
+      </div>
+
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot done"></div><span class="callsign sm sonnet">sonnet3</span></div>
+        <div class="lamp-desc">add pin persistence</div>
+        <div class="lamp-stat">20 tools · 50s</div>
+        <div class="lamp-conf conf good">94%</div>
+      </div>
+
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot done"></div><span class="callsign sm haiku">haiku6</span></div>
+        <div class="lamp-desc">cockpit grid overflow</div>
+        <div class="lamp-stat">14 tools · 48s</div>
+        <div class="lamp-conf conf good">96%</div>
+      </div>
+
+      <div class="lamp done">
+        <div class="lamp-top"><div class="dot done"></div><span class="callsign sm sonnet">sonnet</span></div>
+        <div class="lamp-desc">index.html agent renderer</div>
+        <div class="lamp-stat">24 tools · 55s</div>
+        <div class="lamp-conf conf meh">90%</div>
+      </div>
+
+    </div>
+  </section>
+
+</div><!-- /.cockpit -->
+
+<!-- ── SVG ARC CONNECTORS (cosmetic, theater spirit) ──────── -->
+<!-- Two arcs drawn from tasks panel header toward the ticker,
+     suggesting flow between dispatch and execution -->
+<svg class="arc-connector" aria-hidden="true">
+  <!-- Left arc: tasks → balance -->
+  <path d="M 220 130 Q 150 260 180 400" />
+  <!-- Right arc: roster → ticker -->
+  <path d="M 760 130 Q 830 280 760 480" />
+</svg>
+
+<script>
+// Task row expand/collapse (already wired with onclick above,
+// this adds keyboard support for accessibility)
+document.querySelectorAll('.task-head').forEach(head => {
+  head.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      head.click();
+    }
+  });
+  head.setAttribute('tabindex', '0');
+  head.setAttribute('role', 'button');
+});
+
+// Subtle: pulse the "running" stat value on a timer to suggest liveness
+(function() {
+  const runVal = document.querySelector('.stat.active .stat-v');
+  if (!runVal) return;
+  // The CSS animation handles the glow, but we also bump tool call count
+  let tools = 207;
+  const toolEl = document.querySelectorAll('.stat-v')[4]; // 5th stat = tool calls
+  if (!toolEl) return;
+  setInterval(() => {
+    // stochastically add 1-3 tool calls to make it feel alive
+    tools += Math.floor(Math.random() * 3);
+    toolEl.textContent = tools;
+  }, 2800);
+})();
+
+// Simulate a new tape line arriving from a running agent
+(function() {
+  const tape = document.querySelector('.tape-wrap');
+  if (!tape) return;
+  const tools = [
+    ['sonnet2', 'sonnet', 'Bash',  'python -c "import json; d=json.load(open(\'cockpit.html\'))"'],
+    ['haiku',   'haiku',  'Grep',  'pattern: "border-radius" path: theater.html'],
+    ['R·sonnet3','reviewer','Read','theater.html · lines 50-100'],
+    ['sonnet2', 'sonnet', 'Edit',  'cockpit-theater-redesign.html · pilot lights section'],
+    ['haiku',   'haiku',  'Bash',  'ls /dashboard/templates/'],
+  ];
+  let idx = 0;
+  setInterval(() => {
+    const [cs, cls, tool, arg] = tools[idx % tools.length];
+    idx++;
+    const now = new Date();
+    const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    const line = document.createElement('div');
+    line.className = 'tape-line';
+    line.style.animationDelay = '0ms';
+    line.innerHTML = `<span class="ts">${ts}</span><span class="tag ${cls}">${cs}</span> <span class="tool">${tool}</span>  <span class="arg">${arg}</span>`;
+    tape.prepend(line);
+    while (tape.children.length > 15) tape.lastElementChild.remove();
+  }, 4500);
+})();
+</script>
+
+</body>
+</html>
