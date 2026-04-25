@@ -1,16 +1,21 @@
-# Protocol — The 5 Mitigations
+# Protocol — The 8 Mitigations
 
-The framework's failure mode is **confident-shallow output**: a muscle at the wrong tier returns a plausible-looking report that the orchestrator merges into a polished-looking synthesis which hides the thinness. Five mitigations, layered by stakes, close that gap.
+The framework's failure mode is **confident-shallow output**: a muscle at the wrong tier returns a plausible-looking report that the orchestrator merges into a polished-looking synthesis which hides the thinness. Eight mitigations, layered by stakes, close that gap.
+
+The original 5 mitigations remain. Mitigations #6 (tool-use anomaly), #7 (cross-pollination), and #8 (synthesis quality gate) were added in the v2 upgrade after a real swarm run revealed gaps that the original 5 could not catch.
 
 ## Mitigation summary
 
 | # | Name | Cost added | Time added | Blocks parallel? | When |
 |---|---|---|---|---|---|
-| 1 | Reviewer loop | +$0.15–0.50 | +1–2 min tail | no | `[H]` only |
+| 1 | Reviewer loop | +$0.15–0.50 | +1–2 min tail | no | `[H]` always; `[M]` on dynamic trigger |
 | 2 | Escalation protocol | +0 baseline, +$0.05–0.15 on trigger | +30–60s when fires | no | `[M]` and `[H]` |
-| 3 | Spot-check verification | +$0.02/agent | +20–40s | no | `[M]` and `[H]` |
+| 3 | Spot-check verification | +$0.02/agent | +20–40s | no | `[M]` and `[H]` (mandatory artifact) |
 | 4 | Model-match discipline | 0 | 0 | no | **always** |
 | 5 | Typed outputs + confidence | ~0 | 0 | no | **always** |
+| 6 | Tool-use anomaly detection | ~0 | 0 (pure parsing) | no | **always** |
+| 7 | Cross-pollination pass | +$0.05–0.15 | +30–60s | no | swarms with N ≥ 4 |
+| 8 | Synthesis quality gate | ~0 | 0 (orchestrator self-check) | no | **always** (capstone) |
 
 ## #4 — Model-match discipline (always on, the foundation)
 
@@ -72,7 +77,68 @@ If a spot-check fails: flag the finding as **unverified** in synthesis, note the
 
 This costs ~3–9 extra orchestrator tool calls per swarm. Catches fabrication, unit errors, and confident-wrong claims. Costs ~$0.02 per agent.
 
-## #1 — Reviewer loop (on for `[H]` only)
+## #6 — Tool-use anomaly detection (always on)
+
+After parsing each muscle's META block, check `tools_used` against the recipe's expected floor (defined in `defaults.json` `recipe_floors` and surfaced in `docs/RECIPES.md`).
+
+```
+floor = recipe_floors[recipe_name]  # e.g. {"WebSearch": 4, "WebFetch": 2}
+actual = muscle.meta.tools_used    # e.g. {"WebSearch": 0, "WebFetch": 0, ...}
+
+for tool, min_count in floor.items():
+    if actual.get(tool, 0) < min_count:
+        anomaly_detected(muscle, tool, actual.get(tool, 0), min_count)
+        break
+```
+
+When an anomaly is detected, behavior depends on `discipline.anomaly_detection`:
+
+- `"off"` — silently ignore. Use only when you really trust the agents.
+- `"warn"` (default) — flag the muscle in the synthesis caveat block: "Agent E reported 0 web searches on a research task — its claims are unverified despite self-reported confidence."
+- `"block"` — auto re-dispatch on the next-higher tier (Haiku → Sonnet → Opus) as if the muscle's confidence were < 0.5, regardless of what it claimed.
+
+**Why this matters:** in the v2 swarm run that motivated this upgrade, an agent dispatched on a research task returned with 0 tool uses and self-reported confidence 0.88. The orchestrator missed it entirely. The synthesis cited the agent's claims as if they were verified. Tool-use anomaly detection catches exactly this case — the agent's self-grade lies, but the tool-call trace doesn't.
+
+**Cost:** zero. Pure parsing. Re-escalation when fired adds the cost of one extra muscle dispatch (~$0.05–0.30 depending on tier).
+
+## #7 — Cross-pollination pass (on for swarms with N ≥ 4)
+
+Before synthesis, the orchestrator does a "key facts extract" across all muscle reports:
+
+1. From each muscle's report, extract the top 3 headline claims (bold/lead/conclusion-stated).
+2. For each fact, check if it would change another muscle's recommendation.
+3. If yes, emit a `## Cross-link findings` block listing the contradiction or integration.
+
+**Example from the swarm run that motivated this:**
+> Muscle C found: "Gemini CLI cold start = 20–50s on Windows."
+> Muscle D recommended: "dual-CLI architecture with Claude + Gemini subprocess."
+> Cross-link finding: Muscle D's recommendation is broken on Windows because of fact from Muscle C. Synthesis should add a caveat: "Use direct Gemini API SDK, not CLI subprocess."
+
+Without this pass, each muscle's report stays in its own scope. The synthesis can describe both findings but won't notice the contradiction. The orchestrator (one model holding all reports) can spot what individual muscles cannot.
+
+**Settings gate:** `discipline.cross_link_enabled` (default `true`). Skipped automatically when N < `discipline.cross_link_min_agents` (default 4) — overhead not worth it for tiny swarms.
+
+**Cost:** ~5 min orchestrator time on a 6-agent swarm. ~$0.05–0.15 in API equivalent.
+
+## #8 — Synthesis quality gate (always on, capstone)
+
+Before publishing the final synthesis, the orchestrator runs a 7-item self-check that integrates all prior mitigations into one enforcement point. See `templates/synthesis-gate.md` for the full checklist:
+
+1. All META blocks parsed and confidences extracted?
+2. All low-confidence claims labeled "unverified" in synthesis?
+3. Tool-use anomalies flagged in caveat block?
+4. Cross-link conflicts surfaced?
+5. Spot-check artifact present (for `[M]`/`[H]`)?
+6. Reviewer triggered if conditions met?
+7. Cost report emitted per settings?
+
+Each check returns `pass | fail (remediated) | skipped`. Hard blocks (missing META, missing artifact) prevent publish until resolved. Soft remediations (label unverified, inject caveat) are silently fixed by the orchestrator.
+
+**Why this is the capstone:** without it, an orchestrator can technically have implemented Mitigations 1–7 but still publish a synthesis that fails them. The gate is the integration test.
+
+**Cost:** ~0. Pure orchestrator self-check.
+
+## #1 — Reviewer loop (on for `[H]` always; `[M]` on dynamic trigger)
 
 After the swarm and spot-checks, dispatch a **reviewer agent** — Sonnet for most [H] cases, Opus when the decision is really expensive. The reviewer gets:
 
@@ -93,15 +159,19 @@ Reviewer output goes into its own dashboard card, visually linked to the swarm. 
 
 ## Safety tag → mitigation layering
 
-| Safety tag | #4 Model-match | #5 Typed outputs | #2 Escalation | #3 Spot-check | #1 Reviewer |
-|---|---|---|---|---|---|
-| `[L]` low-stakes | ✅ | ✅ | ⬜ | ⬜ | ⬜ |
-| `[M]` medium-stakes | ✅ | ✅ | ✅ | ✅ | ⬜ |
-| `[H]` high-stakes | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Safety tag | #4 Match | #5 Typed | #2 Esc. | #3 Spot-check | #6 Anomaly | #7 Cross-link | #1 Reviewer | #8 Gate |
+|---|---|---|---|---|---|---|---|---|
+| `[L]` low-stakes | ✅ | ✅ | ⬜ | ⬜ | ✅ | ✅ (if N≥4) | ⬜ | ✅ |
+| `[M]` medium-stakes | ✅ | ✅ | ✅ | ✅ (mandatory artifact) | ✅ | ✅ (if N≥4) | ⬜ static; ✅ on dynamic trigger | ✅ |
+| `[H]` high-stakes | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (if N≥4) | ✅ | ✅ |
 
 The tag goes in the description prefix: `[M] Audit MachineGuides diagnoses/`.
 
 The dashboard parses the prefix and renders a colored safety pill.
+
+Mitigations #6 (anomaly) and #8 (gate) run on every safety tag — they're cheap pure-parse checks that catch failures the other mitigations don't.
+
+Mitigation #7 (cross-link) skips when N < 4 regardless of tag, since orchestrator overhead isn't worth it for tiny swarms.
 
 ## Cost summary
 
@@ -124,10 +194,25 @@ Trivial premium for catching confident-wrong output. Always worth it when the sw
 
 ## Implementation checklist
 
-- [ ] Dispatch template ends with META contract every time
+**Pre-dispatch:**
+- [ ] Settings loaded (`lib/memory.py:load_settings()`)
+- [ ] Knowledge tier searched for similar past runs (Step 0.5 in SKILL.md)
+- [ ] Dispatch template ends with full META contract (incl. `tools_used`)
 - [ ] Description prefixed with `[L]` / `[M]` / `[H]`
 - [ ] Explicit exclusion list in prompt so muscles don't trample each other
-- [ ] After swarm: iterate muscles, parse META, escalate any `confidence < 0.7`
-- [ ] For `[M]` and `[H]`: pick 3 claims total, spot-check
-- [ ] For `[H]` only: dispatch reviewer with adversarial mandate
-- [ ] Synthesize: flag unverified findings, never oversell
+
+**Per-muscle parsing:**
+- [ ] Parse confidence — escalate any `< reescalation_threshold` (default 0.7)
+- [ ] Parse `tools_used` — check against recipe floor (mitigation #6); fire anomaly action per settings
+- [ ] Write per-agent JSON to `memory/operations/<session>/agents/<name>.json`
+
+**Post-swarm (orchestrator):**
+- [ ] For `[M]` and `[H]` with `spot_check_enforce: true`: emit spot-check artifact (mandatory; even "Picked: 0" if all confidences high)
+- [ ] For N ≥ `cross_link_min_agents` with `cross_link_enabled: true`: run cross-pollination pass (mitigation #7), emit cross-link.md if conflicts found
+- [ ] Check dynamic reviewer triggers (mitigation #5 conditions): if any fires, dispatch reviewer with adversarial mandate
+- [ ] Run synthesis quality gate (mitigation #8) — apply hard blocks and soft remediations
+- [ ] Compute cost report per `output.cost_report` setting; write to operations dir always; emit to chat per setting
+
+**Post-synthesis:**
+- [ ] Promote operations session to Knowledge tier (`knowledge.promote(session)`)
+- [ ] Touch cleanup.lock so daily TTL job can eventually delete the operations dir

@@ -7,9 +7,21 @@ compression.
 
 ## When to use
 
-Only for `[H]` safety swarms — decisions with real money, customer, or safety
-consequences. On `[M]` swarms, escalation + spot-check is enough. Reviewer
-adds ~$0.20–0.50 and ~2 min.
+The reviewer fires on either of two conditions:
+
+**Static trigger (always):**
+- `[H]` safety tag — decisions with real money, customer, or safety consequences
+
+**Dynamic triggers (any one fires it, controlled by `discipline.reviewer_dynamic_triggers.*` settings, all default ON):**
+
+1. **Low confidence after re-escalation** — any muscle's confidence is still < `reescalation_threshold` (default 0.7) after the auto-escalation pass. Means the higher tier ALSO couldn't get there, so adversarial review is justified.
+2. **High confidence variance across muscles** — confidence spread > `confidence_variance_threshold` (default 0.15). Big disagreements between muscles signal something the synthesis is glossing over.
+3. **Tool-use anomaly** — any muscle was flagged by anomaly detection (PROTOCOL.md mitigation #6). The muscle either skipped real work or returned suspiciously fast — reviewer should poke at the claims.
+4. **Cross-link contradiction** — the cross-pollination pass (PROTOCOL.md mitigation #7) found at least one contradiction between muscle reports. Reviewer should resolve which muscle is right.
+
+These dynamic triggers mean an `[M]` swarm CAN escalate to a reviewer if quality red flags appear. Each dynamic trigger is individually toggleable in settings, so you can dial down sensitivity if you find too many false positives.
+
+Cost: reviewer adds ~$0.20–0.50 and ~2 min when it fires.
 
 ## Model choice
 

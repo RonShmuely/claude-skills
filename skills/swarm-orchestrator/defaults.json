@@ -1,0 +1,93 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "last_updated": "2026-04-24",
+    "description": "Default settings for swarm-orchestrator. Override via ~/.claude/swarm-orchestrator/settings.json (user-level) or <skill-dir>/settings.local.json (skill-local). Run /swarm-config to edit."
+  },
+
+  "output": {
+    "cost_report": "off",
+    "output_format": "chat",
+    "verbose_meta": false,
+    "synthesis_style": "punchy"
+  },
+
+  "discipline": {
+    "spot_check_enforce": true,
+    "spot_check_sample_size": 3,
+    "cross_link_enabled": true,
+    "cross_link_min_agents": 4,
+    "anomaly_detection": "warn",
+    "reescalation_threshold": 0.7,
+    "low_confidence_flag_threshold": 0.5,
+    "reviewer_dynamic_triggers": {
+      "low_confidence_after_reescalation": true,
+      "high_confidence_variance": true,
+      "tools_used_anomaly": true,
+      "cross_link_contradictions": true
+    },
+    "confidence_variance_threshold": 0.15
+  },
+
+  "models": {
+    "default_research_tier": "sonnet",
+    "default_audit_tier": "haiku",
+    "force_opus_for": [],
+    "temperature": {
+      "haiku": 0.0,
+      "sonnet": 0.0,
+      "opus": 0.0
+    }
+  },
+
+  "quota": {
+    "warnings_enabled": true,
+    "max_parallel_agents": 8
+  },
+
+  "memory": {
+    "enabled": true,
+    "search_on_dispatch": true,
+    "similarity_threshold": 0.85,
+    "operations": {
+      "ttl_days": 7
+    },
+    "knowledge": {
+      "enable_vectors": false,
+      "embedding_model": "all-MiniLM-L6-v2",
+      "fts_weight": 0.4,
+      "vector_weight": 0.6
+    }
+  },
+
+  "recipe_floors": {
+    "research-brief": {
+      "WebSearch": 4,
+      "WebFetch": 2
+    },
+    "folder-audit": {
+      "Glob": 1,
+      "Read": 5
+    },
+    "inventory": {
+      "Glob": 1
+    },
+    "code-review-swarm": {
+      "Read": 3
+    },
+    "doc-audit": {
+      "Glob": 1,
+      "Grep": 1
+    },
+    "dedup-scan": {
+      "Glob": 1
+    },
+    "diagnose-machine-fault": {
+      "WebSearch": 0
+    },
+    "bulk-classify": {},
+    "wow-demo": {
+      "Glob": 1
+    }
+  }
+}

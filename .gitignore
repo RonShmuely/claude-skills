@@ -3,6 +3,7 @@
 !settings.json
 !package.json
 !package-lock.json
+!skills/swarm-orchestrator/defaults.json
 __pycache__/
 *.pyc
 .DS_Store

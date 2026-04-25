@@ -10,6 +10,7 @@ confidence: 0.XX
 method: "how you gathered the data"
 not_checked: ["thing 1", "thing 2"]
 sample_size: N or "exhaustive"
+tools_used: {"WebSearch": 8, "WebFetch": 6, "Read": 0, "Grep": 0}
 ---END META---
 ```
 
@@ -60,6 +61,26 @@ How many items did you actually inspect?
 
 If you sampled, **your confidence should be lower** and the method should mention sampling.
 
+### `tools_used` (required, dict of string → int)
+
+Counts of tool calls you actually made, by tool name. The orchestrator uses this to detect anomalies — for example, a research task that returns with `WebSearch: 0, WebFetch: 0` is suspicious regardless of self-reported confidence.
+
+Examples:
+
+- Research agent that did real web work: `{"WebSearch": 8, "WebFetch": 6, "Read": 2}`
+- Code audit that did file reads: `{"Glob": 3, "Read": 12, "Grep": 5}`
+- Inventory agent: `{"Glob": 2, "Bash": 1}` (e.g., `ls` via Bash)
+- Pure-reasoning agent (rare; flag this in `method`): `{}`
+
+**Orchestrator behavior:** if `tools_used` doesn't meet the recipe's expected floor (`docs/RECIPES.md`), the orchestrator runs anomaly detection per `discipline.anomaly_detection` setting:
+- `off` — ignore
+- `warn` — flag in synthesis caveat block
+- `block` — auto re-dispatch on a higher tier as if confidence were < 0.5
+
+Never fake this. The orchestrator can cross-check against actual tool-use traces.
+
+**Backward compat:** Missing `tools_used` is treated as `{}` and anomaly detection falls back to `warn` for that agent. New muscle prompts emit it; legacy ones gracefully degrade.
+
 ## Why this contract matters
 
 Without META, the orchestrator has no way to tell "Haiku exhaustively scanned everything and is 95% sure" from "Haiku looked at 3 files and is guessing." The prose reads the same. The output shape reads the same. Only the explicit confidence + method + sample_size lets the orchestrator catch confident-shallow work.
@@ -79,14 +100,17 @@ The orchestrator should reject these and re-dispatch asking for actual metadata.
 
 ## For orchestrators reading this
 
-Parse the META block with this regex pattern (matches across single- or multi-line):
+Parse the META block with these regex patterns (match across single- or multi-line):
 
 ```python
-CONFIDENCE_RE = re.compile(r"confidence\s*[:=]\s*([0-9]*\.?[0-9]+)", re.I)
-METHOD_RE     = re.compile(r"method\s*[:=]\s*[\"']?([^\"'\n]+)", re.I)
-SAMPLE_RE     = re.compile(r"sample_size\s*[:=]\s*[\"']?([^\"'\n]+)", re.I)
+CONFIDENCE_RE  = re.compile(r"confidence\s*[:=]\s*([0-9]*\.?[0-9]+)", re.I)
+METHOD_RE      = re.compile(r"method\s*[:=]\s*[\"']?([^\"'\n]+)", re.I)
+SAMPLE_RE      = re.compile(r"sample_size\s*[:=]\s*[\"']?([^\"'\n]+)", re.I)
 NOT_CHECKED_RE = re.compile(r"not_checked\s*[:=]\s*\[([^\]]*)\]", re.I)
+TOOLS_USED_RE  = re.compile(r"tools_used\s*[:=]\s*(\{[^}]*\})", re.I)
 ```
+
+For `tools_used`, parse the matched string as JSON. Missing field → `{}`. The orchestrator then compares against the recipe floor (see `docs/RECIPES.md` and `defaults.json` `recipe_floors`) to decide if anomaly detection should fire.
 
 Normalize confidence: if value > 1, assume 0–10 scale and divide by 10.
 

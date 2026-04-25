@@ -1,0 +1,2 @@
+# keeps memory/knowledge/ in version control even when empty
+# runs.sqlite is created here at runtime and gitignored

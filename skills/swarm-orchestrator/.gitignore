@@ -1,0 +1,24 @@
+# Local overrides (user-machine specific, not for repo)
+settings.local.json
+
+# Operations tier — transient swarm session artifacts
+memory/operations/*/
+!memory/operations/.gitkeep
+
+# Knowledge tier — local SQLite + embeddings (per-machine)
+memory/knowledge/*.sqlite
+memory/knowledge/*.sqlite-shm
+memory/knowledge/*.sqlite-wal
+memory/knowledge/embeddings/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~

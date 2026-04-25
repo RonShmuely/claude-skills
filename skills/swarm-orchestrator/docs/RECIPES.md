@@ -1,6 +1,12 @@
 # Recipes — Reusable Swarm Patterns
 
-Pre-designed swarm shapes you can fire by name. Each recipe defines: the decomposition, muscle tier, safety tag, and synthesis shape.
+Pre-designed swarm shapes you can fire by name. Each recipe defines: the decomposition, muscle tier, safety tag, expected tool-use floors, and synthesis shape.
+
+## About `expected_tools_floor`
+
+Each recipe declares the minimum tool-call counts the orchestrator expects from each muscle. The anomaly detector (PROTOCOL.md mitigation #6) compares actual `tools_used` (from META block) against this floor. If a muscle returns below the floor, anomaly detection fires per `discipline.anomaly_detection` setting. Floors are also overridable per-user in `defaults.json` `recipe_floors`.
+
+Example: a research-shaped recipe expects `WebSearch >= 4` per muscle. If a muscle returns with `WebSearch: 0`, that's an anomaly regardless of self-reported confidence.
 
 ## Recipe: `wow-demo` / `week-start-triage` ⭐ flagship
 
@@ -166,7 +172,31 @@ safety: [L] / [M] / [H]
 dispatch_template: path to templates/*.md to base from
 synthesis_shape: what the merged output looks like
 reviewer_loop: yes / no
+expected_tools_floor: minimum tool counts per muscle (anomaly detector reference)
 ```
+
+## Tool-use floors per recipe
+
+Used by anomaly detection (PROTOCOL.md mitigation #6). Override per-user via `defaults.json` `recipe_floors` or your settings.json:
+
+| Recipe | Expected per-muscle floor |
+|---|---|
+| `research-brief` | `WebSearch ≥ 4`, `WebFetch ≥ 2` |
+| `folder-audit` | `Glob ≥ 1`, `Read ≥ 5` |
+| `inventory` | `Glob ≥ 1` |
+| `diagnose-machine-fault` | `Read ≥ 1` (NotebookLM via MCP, may not register WebSearch) |
+| `code-review-swarm` | `Read ≥ 3` |
+| `doc-audit` | `Glob ≥ 1`, `Grep ≥ 1` |
+| `dedup-scan` | `Glob ≥ 1` |
+| `bulk-classify` | `{}` (no floor — model can classify from prompt alone) |
+| `wow-demo` | `Glob ≥ 1` |
+
+If a muscle returns below its floor, anomaly detection fires per `discipline.anomaly_detection`:
+- `off` — ignore
+- `warn` — flag in synthesis caveat block
+- `block` — auto re-dispatch on a higher tier as if confidence were < 0.5
+
+Floors are advisory — some real workloads legitimately need fewer tool calls (e.g., a research task where the muscle finds the answer on the first WebFetch). The orchestrator should treat anomalies as a signal, not an absolute rule. When you see a recurring false anomaly for a recipe, lower its floor in your settings.
 
 ## Adding a new recipe
 

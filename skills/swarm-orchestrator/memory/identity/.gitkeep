@@ -1,0 +1,2 @@
+# keeps memory/identity/ in version control even when empty
+# place per-user identity markdown files here, e.g. user.md, preferences.md
