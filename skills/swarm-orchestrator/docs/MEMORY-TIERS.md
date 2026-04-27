@@ -1,12 +1,12 @@
 # Memory Tiers — Identity / Operations / Knowledge
 
-The orchestrator's memory architecture mirrors OpenClaw's three-tier model: each tier has its own storage, read API, write rules, and lifetime. The skill never accidentally treats Identity as ephemeral or Operations as permanent — separation is enforced by giving each tier a different access function in `lib/memory.py`.
+The orchestrator's memory is split into three tiers: each has its own storage, read API, write rules, and lifetime. The skill never accidentally treats Identity as ephemeral or Operations as permanent — separation is enforced by giving each tier a different access function in `lib/memory.py`.
 
 ## Why three tiers, not one flat MEMORY.md
 
 A single flat memory file mixes:
 
-- **Who you are** (Ron, runs Wirtgen+Bobcat fleet, prefers punchy synthesis) — should NEVER auto-overwrite
+- **Who you are** (your role, your fleet/tools, your preferred output style) — should NEVER auto-overwrite
 - **What you're doing right now** (current task, in-flight tool outputs, dispatch trace) — should evict in days
 - **What you know from past runs** (cumulative diagnostic experience, indexed and searchable) — should grow forever, indexed for fast recall
 

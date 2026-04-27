@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Swarm Monitor — Dispatch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230a0a0a'/%3E%3Crect x='13' y='7' width='6' height='18' fill='%23e10600'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: { colors: { crimson: { 400:'#ff3a30', 500:'#E10600', 600:'#C20500' } } } } };
+</script>
+<style>
+  :root {
+    --crimson:      #E10600;
+    --crimson-hot:  #FF3A30;
+    --crimson-dim:  #5A0200;
+    --crimson-deep: #2A0100;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #060606; color: #e5e5e5;
+    font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif;
+    margin: 0; display: flex; flex-direction: column;
+  }
+  .mono { font-family: 'JetBrains Mono', 'Geist Mono', 'IBM Plex Mono', ui-monospace, monospace; }
+
+  /* BiDi: Hebrew-capable fallback chain for dynamic agent / user content. */
+  :root { --font-bidi: 'JetBrains Mono', 'Geist Mono', 'Heebo', 'Segoe UI', system-ui, sans-serif; }
+  [dir="auto"], [dir="rtl"] { font-family: var(--font-bidi); }
+  [dir="auto"] { unicode-bidi: plaintext; }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-thumb { background:#262626; border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:#404040; }
+
+  .pulse-red { animation: pulse-red 1.2s ease-in-out infinite; }
+  @keyframes pulse-red {
+    0%,100% { box-shadow: 0 0 0 0 rgba(225,6,0,.75); }
+    50%     { box-shadow: 0 0 14px 4px rgba(225,6,0,0); }
+  }
+  .cursor-blink::after { content:'▮'; color:#e10600; margin-left:4px; animation:blink 1.05s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .text-glow-red { text-shadow: 0 0 8px rgba(225,6,0,.5); }
+  .kbd { font-family: 'JetBrains Mono', monospace; background:#171717; border:1px solid #262626; border-radius:3px; padding:1px 5px; font-size:10px; color:#9ca3af; }
+
+  /* Route nav (mirrors mode-switch from index.html) */
+  .route-switch {
+    display: inline-flex; gap: 2px;
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; padding: 2px;
+  }
+  .route-btn {
+    padding: 4px 10px; border-radius: 4px; font-size: 11px;
+    color: #888; background: transparent; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+    transition: all .15s; text-transform: uppercase; text-decoration: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .route-btn:hover { color: #ddd; background: #151515; }
+  .route-btn.active { color: #fff; background: var(--crimson); box-shadow: 0 0 10px rgba(225,6,0,.4); }
+
+  /* Composer */
+  .composer {
+    display: grid; grid-template-columns: 1fr auto; gap: 14px;
+    padding: 14px;
+  }
+  .composer-left { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .composer-right { display: flex; flex-direction: column; justify-content: flex-end; }
+
+  textarea.field {
+    width: 100%; resize: none;
+    background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 8px;
+    color: #e5e5e5; padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.55;
+    transition: border-color .15s, box-shadow .15s;
+    outline: none;
+  }
+  textarea.field:focus { border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(225,6,0,.12); }
+  textarea.field::placeholder { color: #444; }
+
+  /* Model picker */
+  .model-pick {
+    display: inline-flex; gap: 2px;
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 6px; padding: 2px;
+  }
+  .model-btn {
+    padding: 5px 12px; border-radius: 4px; font-size: 11px;
+    color: #888; background: transparent; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.12em;
+    text-transform: uppercase; font-weight: 600; transition: all .15s;
+  }
+  .model-btn:hover { color: #eee; background: #141414; }
+  .model-btn[data-model="haiku"].active   { background: #16a34a; color: #fff; box-shadow: 0 0 10px rgba(22,163,74,.4); }
+  .model-btn[data-model="sonnet"].active  { background: #2563eb; color: #fff; box-shadow: 0 0 10px rgba(37,99,235,.4); }
+  .model-btn[data-model="opus"].active    { background: #9333ea; color: #fff; box-shadow: 0 0 10px rgba(147,51,234,.4); }
+
+  /* Flag toggles (yolo / blank) */
+  .flag-btn {
+    padding: 4px 9px; border-radius: 4px; font-size: 10px;
+    color: #777; background: #0a0a0a; border: 1px solid #1a1a1a; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;
+    text-transform: uppercase; transition: all .15s;
+  }
+  .flag-btn:hover { color: #ccc; border-color: #2a2a2a; }
+  #yolo-toggle[aria-pressed="true"]  { color: #fff; background: #7f1d1d; border-color: #dc2626; box-shadow: 0 0 10px rgba(220,38,38,.45); }
+  #blank-toggle[aria-pressed="true"] { color: #fff; background: #14532d; border-color: #16a34a; box-shadow: 0 0 8px rgba(22,163,74,.35); }
+
+  /* Viewer mode toggle (raw / flow) */
+  .view-toggle {
+    display: inline-flex; gap: 1px;
+    background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 5px; padding: 1px;
+    margin-left: 10px;
+  }
+  .view-btn {
+    padding: 3px 9px; border-radius: 3px; font-size: 9px;
+    color: #777; background: transparent; border: none; cursor: pointer;
+    font-family: 'JetBrains Mono', monospace; letter-spacing: 0.15em;
+    text-transform: uppercase; transition: all .12s;
+  }
+  .view-btn:hover { color: #ddd; }
+  .view-btn.active { color: #fff; background: var(--crimson); }
+
+  /* Viewer mode visibility — toggled by .mode-flow / .mode-raw on .viewer-body */
+  .viewer-body.mode-flow .raw  { display: none; }
+  .viewer-body.mode-raw  .flow { display: none; }
+  .viewer-body.mode-raw  .raw  { display: block; }
+
+  /* FLOW view — designed to feel like a Claude Code session transcript */
+  .flow { display: flex; flex-direction: column; gap: 4px; padding: 8px 4px; }
+  .flow-evt {
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.55;
+    border-left: 2px solid transparent; padding: 5px 12px 5px 12px;
+    border-radius: 0 4px 4px 0;
+  }
+  .flow-evt .glyph { display: inline-block; width: 18px; color: #666; flex-shrink: 0; }
+  .flow-evt .label { color: #777; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; margin-right: 8px; }
+  .flow-evt summary { cursor: pointer; list-style: none; outline: none; }
+  .flow-evt summary::-webkit-details-marker { display: none; }
+  .flow-evt details > summary::after { content: ' ▸'; color: #555; font-size: 10px; }
+  .flow-evt details[open] > summary::after { content: ' ▾'; }
+
+  /* SYSTEM (init etc) */
+  .flow-evt.system { color: #888; font-size: 11px; padding: 2px 12px; }
+  .flow-evt.system .body { color: #888; }
+
+  /* THINKING — collapsed by default, single-line preview */
+  .flow-evt.thinking {
+    border-color: #4b5563; background: rgba(75,85,99,.05);
+    color: #9ca3af; font-style: italic; font-size: 11.5px;
+  }
+  .flow-evt.thinking summary { color: #6b7280; }
+  .flow-evt.thinking .preview { color: #9ca3af; }
+  .flow-evt.thinking .full { display: block; margin-top: 6px; padding: 6px 8px; background: rgba(0,0,0,.35); border-radius: 3px; color: #a8b3c7; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+
+  /* ASSISTANT TEXT — markdown-lite rendering */
+  .flow-evt.text {
+    border-color: #3b82f6; background: rgba(59,130,246,.05);
+    padding: 8px 14px; font-size: 13px; line-height: 1.6;
+    font-family: -apple-system, 'Segoe UI', 'Inter', sans-serif;
+    color: #e5e7eb;
+  }
+  .flow-evt.text p { margin: 0 0 8px 0; }
+  .flow-evt.text p:last-child { margin-bottom: 0; }
+  .flow-evt.text strong { color: #fff; font-weight: 700; }
+  .flow-evt.text em { color: #cbd5e1; font-style: italic; }
+  .flow-evt.text ul, .flow-evt.text ol { margin: 4px 0 8px 18px; padding: 0; }
+  .flow-evt.text li { margin: 2px 0; }
+  .flow-evt.text code {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    background: #0f0f0f; border: 1px solid #262626; border-radius: 3px;
+    padding: 1px 5px; color: #fbbf24;
+  }
+  .flow-evt.text pre {
+    margin: 6px 0; padding: 10px 12px;
+    background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 4px;
+    overflow-x: auto; max-height: 360px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.5;
+    color: #e5e7eb;
+  }
+  .flow-evt.text pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+  .flow-evt.text h1,.flow-evt.text h2,.flow-evt.text h3 { color: #fff; margin: 10px 0 4px; font-weight: 700; }
+  .flow-evt.text h1 { font-size: 16px; }
+  .flow-evt.text h2 { font-size: 14px; }
+  .flow-evt.text h3 { font-size: 13px; color: #cbd5e1; }
+  .flow-evt.text a { color: #60a5fa; text-decoration: underline; }
+
+  /* TOOL CALL — compact one-liner */
+  .flow-evt.tool {
+    border-color: #f59e0b; background: rgba(245,158,11,.04);
+    display: flex; align-items: baseline; gap: 6px;
+    padding: 4px 12px; font-size: 12px;
+  }
+  .flow-evt.tool .name { color: #fbbf24; font-weight: 700; }
+  .flow-evt.tool .args { color: #d4d4d8; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+
+  /* TOOL RESULT — collapsed summary, expandable */
+  .flow-evt.tool-result {
+    border-color: #16a34a; background: rgba(22,163,74,.04);
+    padding: 4px 12px; font-size: 12px;
+  }
+  .flow-evt.tool-result.error { border-color: #dc2626; background: rgba(220,38,38,.06); }
+  .flow-evt.tool-result summary { color: #86efac; display: flex; align-items: baseline; gap: 6px; }
+  .flow-evt.tool-result.error summary { color: #fca5a5; }
+  .flow-evt.tool-result .summary-text { font-size: 11.5px; opacity: .85; }
+  .flow-evt.tool-result .full {
+    display: block; margin-top: 6px; padding: 8px 10px;
+    background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 3px;
+    color: #c0c0c0; font-size: 11px; line-height: 1.5;
+    white-space: pre-wrap; max-height: 280px; overflow: auto;
+  }
+
+  /* RESULT — final summary card */
+  .flow-evt.result {
+    border-color: var(--crimson); background: rgba(225,6,0,.08);
+    color: #fff; font-weight: 600; padding: 10px 14px; margin-top: 8px;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .flow-evt.result .meta { color: #cbd5e1; font-weight: 400; font-size: 11.5px; }
+  .flow-evt.result .meta b { color: #fbbf24; font-weight: 600; }
+
+  /* ERROR */
+  .flow-evt.error {
+    border-color: #dc2626; background: rgba(220,38,38,.08);
+    color: #fca5a5; padding: 6px 12px; font-size: 12px;
+  }
+
+  /* Indent tool_result under its preceding tool_use */
+  .flow-evt.tool + .flow-evt.tool-result,
+  .flow-evt.tool-result + .flow-evt.tool-result { margin-left: 22px; }
+
+  .model-badge {
+    display: inline-block; padding: 2px 7px; border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600;
+  }
+  .model-badge.haiku  { background: rgba(22,163,74,.18);   color: #4ade80; border: 1px solid rgba(22,163,74,.5); }
+  .model-badge.sonnet { background: rgba(37,99,235,.18);   color: #60a5fa; border: 1px solid rgba(37,99,235,.5); }
+  .model-badge.opus   { background: rgba(147,51,234,.18);  color: #c084fc; border: 1px solid rgba(147,51,234,.5); }
+
+  /* Dispatch button */
+  .dispatch-btn {
+    background: var(--crimson); color: #fff;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    padding: 16px 28px; border: none; border-radius: 8px; cursor: pointer;
+    transition: all .15s; min-width: 180px;
+    box-shadow: 0 0 0 0 rgba(225,6,0,.6);
+  }
+  .dispatch-btn:hover:not(:disabled) {
+    background: var(--crimson-hot);
+    box-shadow: 0 0 22px rgba(225,6,0,.55);
+    transform: translateY(-1px);
+  }
+  .dispatch-btn:disabled { background: #2a0a0a; color: #6a3030; cursor: not-allowed; }
+
+  /* Disclosure */
+  details.sys summary {
+    list-style: none; cursor: pointer;
+    color: #888; font-size: 11px; font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 4px 0; user-select: none;
+  }
+  details.sys summary::-webkit-details-marker { display: none; }
+  details.sys summary::before { content: '▸ '; color: var(--crimson); }
+  details.sys[open] summary::before { content: '▾ '; }
+
+  /* Status pill */
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600;
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .status-pill.idle    { background: #111; color: #555;    border: 1px solid #1f1f1f; }
+  .status-pill.idle .dot    { background: #555; }
+  .status-pill.running { background: rgba(225,6,0,.12); color: #ff6b62; border: 1px solid rgba(225,6,0,.5); }
+  .status-pill.running .dot { background: var(--crimson); animation: pulse-red 1.2s ease-in-out infinite; }
+  .status-pill.done    { background: rgba(22,163,74,.12); color: #4ade80; border: 1px solid rgba(22,163,74,.5); }
+  .status-pill.done .dot    { background: #16a34a; }
+  .status-pill.killed  { background: #161616; color: #888; border: 1px solid #2a2a2a; }
+  .status-pill.killed .dot  { background: #888; }
+  .status-pill.error   { background: rgba(220,38,38,.18); color: #f87171; border: 1px solid rgba(220,38,38,.6); }
+  .status-pill.error .dot   { background: #dc2626; }
+
+  /* Output viewer */
+  .viewer {
+    background: #050505; border: 1px solid #161616; border-radius: 8px;
+    margin: 0 14px 14px; flex: 1; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .viewer-head {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; border-bottom: 1px solid #161616;
+    background: #0a0a0a;
+  }
+  .viewer-body {
+    flex: 1; overflow-y: auto; padding: 12px 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+    color: #cfcfcf;
+  }
+  .out-line { display: block; }
+  .out-line.stderr { color: #f08a85; opacity: .85; }
+  .out-line.meta { color: #555; font-style: italic; }
+  .done-rule {
+    margin: 12px 0; border: 0; border-top: 1px dashed rgba(225,6,0,.4);
+    position: relative;
+  }
+  .done-rule::after {
+    content: 'done'; position: absolute; top: -8px; left: 50%;
+    transform: translateX(-50%);
+    background: #050505; padding: 0 10px;
+    color: #4ade80; font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.25em; text-transform: uppercase;
+  }
+  .idle-msg {
+    color: #444; font-style: italic; text-align: center;
+    padding: 40px 0; letter-spacing: 0.1em;
+  }
+
+  .kill-btn {
+    background: #2a0a0a; color: #ff6b62;
+    border: 1px solid rgba(225,6,0,.5); border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 0.18em; text-transform: uppercase; font-weight: 600;
+    padding: 4px 10px; cursor: pointer; transition: all .15s;
+  }
+  .kill-btn:hover { background: var(--crimson); color: #fff; }
+  .kill-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Recent strip */
+  .recent-strip {
+    display: flex; gap: 6px; padding: 8px 14px;
+    border-top: 1px solid #141414; background: #080808;
+    overflow-x: auto;
+  }
+  .recent-chip {
+    flex-shrink: 0; padding: 4px 9px; border-radius: 4px;
+    background: #0f0f0f; border: 1px solid #1c1c1c;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: #888; cursor: pointer; transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .recent-chip:hover { border-color: var(--crimson); color: #ddd; }
+  .recent-chip .rdot { width: 6px; height: 6px; border-radius: 50%; }
+  .recent-chip .rdot.running { background: var(--crimson); animation: pulse-red 1.2s ease-in-out infinite; }
+  .recent-chip .rdot.done { background: #16a34a; }
+  .recent-chip .rdot.killed { background: #888; }
+  .recent-chip .rdot.error { background: #dc2626; }
+  .recent-label {
+    color: #444; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    padding: 4px 0; font-family: 'JetBrains Mono', monospace; flex-shrink: 0;
+  }
+
+  .hint { color: #555; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
+  .err-toast {
+    position: fixed; top: 60px; right: 14px; z-index: 50;
+    background: rgba(220,38,38,.15); border: 1px solid rgba(220,38,38,.5);
+    color: #f87171; padding: 8px 12px; border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    max-width: 380px;
+  }
+</style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<header id="header" class="sticky top-0 z-20 bg-black/85 backdrop-blur border-b border-neutral-900 px-4 py-2">
+  <div class="flex items-center gap-3 flex-wrap">
+
+    <div class="flex items-center gap-2 shrink-0">
+      <span class="text-crimson-500 text-xl mono text-glow-red">▮</span>
+      <span class="mono text-xs tracking-widest text-neutral-300 uppercase">swarm monitor</span>
+      <span class="mono text-[10px] text-neutral-600 tracking-widest uppercase">/ dispatch</span>
+    </div>
+
+    <nav class="route-switch shrink-0" aria-label="routes">
+      <a class="route-btn" href="/" title="dashboard">dash</a>
+      <a class="route-btn" href="/theater" title="theater · brain mode">theater</a>
+      <a class="route-btn" href="/cockpit" title="cockpit · ops panel">cockpit</a>
+      <a class="route-btn active" href="/dispatch" title="dispatch · spawn jobs" aria-current="page">dispatch</a>
+    </nav>
+
+    <div class="ml-auto flex items-center gap-3">
+      <span class="hint hidden md:inline">
+        <span class="kbd">Ctrl</span>+<span class="kbd">K</span> focus &nbsp;
+        <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> dispatch
+      </span>
+    </div>
+
+  </div>
+</header>
+
+<!-- COMPOSER (top ~40%) -->
+<section class="composer" style="flex: 0 0 40%;">
+  <div class="composer-left">
+
+    <div class="flex items-center gap-3 flex-wrap">
+      <span class="mono text-[10px] text-neutral-500 tracking-widest uppercase">model</span>
+      <div class="model-pick" role="radiogroup" aria-label="model">
+        <button class="model-btn" data-model="haiku" role="radio" aria-checked="false">haiku</button>
+        <button class="model-btn active" data-model="sonnet" role="radio" aria-checked="true">sonnet</button>
+        <button class="model-btn" data-model="opus" role="radio" aria-checked="false">opus</button>
+      </div>
+      <span id="model-cost" class="hint ml-1">$3.00 / $15.00 per MTok</span>
+
+      <span class="mono text-[10px] text-neutral-500 tracking-widest uppercase ml-3">flags</span>
+      <button id="yolo-toggle" class="flag-btn" title="--dangerously-skip-permissions: subprocess auto-approves all tool calls. Use only for trusted prompts." aria-pressed="false">⚠ yolo</button>
+      <button id="blank-toggle" class="flag-btn" title="cwd → blank-claude folder. Disables plugins/MCP/hooks for a leaner subprocess." aria-pressed="false">🧹 blank</button>
+    </div>
+
+    <details class="sys">
+      <summary>system prompt (optional)</summary>
+      <textarea id="sys-prompt" dir="auto" class="field mt-2" rows="3"
+        placeholder="You are a careful auditor. Return only what was asked..."></textarea>
+    </details>
+
+    <textarea id="prompt" dir="auto" class="field" rows="8"
+      placeholder="Audit MachineGuides for dead code..."
+      autofocus></textarea>
+
+    <div class="flex items-center justify-between">
+      <span id="char-count" class="hint">0 chars</span>
+      <span class="hint">enter newline · <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> to dispatch</span>
+    </div>
+  </div>
+
+  <div class="composer-right">
+    <button id="dispatch-btn" class="dispatch-btn" disabled>dispatch</button>
+  </div>
+</section>
+
+<!-- VIEWER (bottom ~60%) -->
+<section class="viewer">
+  <div class="viewer-head">
+    <span class="mono text-[10px] text-neutral-500 tracking-widest uppercase">job</span>
+    <span id="job-id" class="mono text-[11px] text-neutral-400">—</span>
+    <span id="job-model-badge" class="model-badge sonnet" style="display:none;">sonnet</span>
+    <span id="status-pill" class="status-pill idle"><span class="dot"></span><span class="label">idle</span></span>
+    <span id="elapsed" class="mono text-[11px] text-neutral-500">00:00</span>
+    <div class="view-toggle" role="radiogroup" aria-label="viewer mode">
+      <button class="view-btn active" data-view="flow" role="radio" aria-checked="true">flow</button>
+      <button class="view-btn" data-view="raw" role="radio" aria-checked="false">raw</button>
+    </div>
+    <div class="ml-auto">
+      <button id="kill-btn" class="kill-btn" disabled>kill</button>
+    </div>
+  </div>
+
+  <div id="viewer-body" class="viewer-body">
+    <div class="idle-msg">READY — compose above and dispatch.</div>
+  </div>
+
+  <div class="recent-strip" id="recent-strip">
+    <span class="recent-label">recent</span>
+    <span class="hint" id="recent-empty">no jobs yet</span>
+  </div>
+</section>
+
+<script>
+(() => {
+  // -------- state --------
+  const state = {
+    model: 'sonnet',
+    job: null,        // {id, model, started_at}
+    es: null,         // EventSource
+    timer: null,
+    stickyScroll: true,
+    finalized: false,
+    yolo: false,
+    blank: false,
+    view: 'flow',     // 'flow' | 'raw'
+    cost: 0,
+  };
+
+  const COST = {
+    haiku:  '$0.80 / $4.00 per MTok',
+    sonnet: '$3.00 / $15.00 per MTok',
+    opus:   '$15.00 / $75.00 per MTok',
+  };
+
+  // -------- elements --------
+  const el = {
+    promptEl:    document.getElementById('prompt'),
+    sysEl:       document.getElementById('sys-prompt'),
+    charCount:   document.getElementById('char-count'),
+    dispatchBtn: document.getElementById('dispatch-btn'),
+    killBtn:     document.getElementById('kill-btn'),
+    modelCost:   document.getElementById('model-cost'),
+    modelBtns:   document.querySelectorAll('.model-btn'),
+    jobId:       document.getElementById('job-id'),
+    jobModel:    document.getElementById('job-model-badge'),
+    statusPill:  document.getElementById('status-pill'),
+    elapsed:     document.getElementById('elapsed'),
+    body:        document.getElementById('viewer-body'),
+    recent:      document.getElementById('recent-strip'),
+    recentEmpty: document.getElementById('recent-empty'),
+  };
+
+  // -------- helpers --------
+  const fmtElapsed = (ms) => {
+    const s = Math.floor(ms / 1000);
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
+
+  const setStatus = (kind, label) => {
+    el.statusPill.className = `status-pill ${kind}`;
+    el.statusPill.innerHTML = `<span class="dot"></span><span class="label">${label}</span>`;
+  };
+
+  const setDispatchEnabled = (on) => {
+    el.dispatchBtn.disabled = !on || el.promptEl.value.trim().length === 0;
+  };
+
+  const setKillEnabled = (on) => { el.killBtn.disabled = !on; };
+
+  const showError = (msg) => {
+    const t = document.createElement('div');
+    t.className = 'err-toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 4500);
+  };
+
+  const escHtml = (s) => (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  // -------- FLOW renderer: parse stream-json events and render readable cards --------
+  const flowAppend = (html) => {
+    if (el.body.querySelector('.idle-msg')) el.body.innerHTML = '';
+    let flow = el.body.querySelector('.flow');
+    if (!flow) { flow = document.createElement('div'); flow.className = 'flow'; el.body.appendChild(flow); }
+    flow.insertAdjacentHTML('beforeend', html);
+    if (state.stickyScroll) el.body.scrollTop = el.body.scrollHeight;
+  };
+
+  // Tool-specific input formatter — produces a clean one-liner per tool type
+  const formatToolInput = (name, input) => {
+    if (!input || typeof input !== 'object') return '';
+    switch (name) {
+      case 'Bash':         return input.command || '';
+      case 'Read':         return input.file_path + (input.offset ? ` :${input.offset}-${(input.offset||0)+(input.limit||0)}` : '');
+      case 'Write':        return input.file_path || '';
+      case 'Edit':         return input.file_path || '';
+      case 'Glob':         return input.pattern + (input.path ? ` in ${input.path}` : '');
+      case 'Grep':         return `"${input.pattern}"` + (input.glob ? ` glob:${input.glob}` : '') + (input.path ? ` in ${input.path}` : '');
+      case 'WebFetch':     return input.url || '';
+      case 'WebSearch':    return `"${input.query}"`;
+      case 'TodoWrite':    return `${(input.todos||[]).length} items`;
+      case 'Task':
+      case 'Agent':        return input.description || input.subagent_type || '';
+      default:
+        const first = Object.keys(input)[0];
+        if (first) {
+          const v = input[first];
+          return typeof v === 'string' ? v : JSON.stringify(v).slice(0, 200);
+        }
+        return '';
+    }
+  };
+
+  // Result summarizer — derives a short status from tool output
+  const summarizeResult = (toolName, body, isErr) => {
+    if (isErr) return body.split('\n')[0].slice(0, 120) || 'error';
+    const lines = body.split('\n').filter(Boolean);
+    if (toolName === 'Bash')   return `exit 0 · ${lines.length} line${lines.length===1?'':'s'} of output`;
+    if (toolName === 'Read')   return `${lines.length} line${lines.length===1?'':'s'} read`;
+    if (toolName === 'Glob' || toolName === 'Grep') {
+      return `${lines.length} match${lines.length===1?'':'es'}`;
+    }
+    if (toolName === 'Write' || toolName === 'Edit') return body.slice(0, 80);
+    if (toolName === 'WebFetch' || toolName === 'WebSearch') return `${body.length} chars fetched`;
+    return lines[0]?.slice(0, 100) || `${body.length} chars`;
+  };
+
+  // Lightweight markdown renderer for assistant text blocks
+  const renderMarkdown = (md) => {
+    let out = escHtml(md);
+    // Code blocks (```lang ... ```)
+    out = out.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code>${code.replace(/\n$/, '')}</code></pre>`);
+    // Inline code
+    out = out.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+    // Headers
+    out = out.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    out = out.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    out = out.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    // Bold + italic
+    out = out.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/(?<![*\w])\*([^*\n]+)\*(?!\w)/g, '<em>$1</em>');
+    // Bullet lists (very basic — group consecutive lines)
+    out = out.replace(/(^|\n)((?:- .+\n?)+)/g, (_, p, group) => {
+      const items = group.trim().split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('');
+      return `${p}<ul>${items}</ul>`;
+    });
+    // Numbered lists
+    out = out.replace(/(^|\n)((?:\d+\. .+\n?)+)/g, (_, p, group) => {
+      const items = group.trim().split('\n').map(l => `<li>${l.replace(/^\d+\. /, '')}</li>`).join('');
+      return `${p}<ol>${items}</ol>`;
+    });
+    // Paragraph breaks (double newline → </p><p>)
+    out = '<p>' + out.split(/\n\n+/).join('</p><p>') + '</p>';
+    // Lone newlines inside paragraphs → <br>
+    out = out.replace(/<p>([^<]*?)\n([^<]*?)<\/p>/g, (_, a, b) => `<p>${a}<br>${b}</p>`);
+    // Clean empty paragraphs
+    out = out.replace(/<p>\s*<\/p>/g, '');
+    out = out.replace(/<p>(<(?:pre|h\d|ul|ol)[^>]*>)/g, '$1');
+    out = out.replace(/(<\/(?:pre|h\d|ul|ol)>)<\/p>/g, '$1');
+    return out;
+  };
+
+  // Track most recent tool_use so we can pair its result
+  let _lastToolName = null;
+
+  const renderFlowEvent = (ev) => {
+    if (!ev || typeof ev !== 'object') return;
+    const t = ev.type;
+
+    // Filter noisy events
+    if (t === 'system' && (ev.subtype === 'hook_started' || ev.subtype === 'hook_response' || ev.subtype === 'post_turn_summary')) return;
+    if (t === 'rate_limit_event') return;
+
+    if (t === 'system' && ev.subtype === 'init') {
+      const sid = (ev.session_id || '').slice(0, 8);
+      const cwd = ev.cwd ? ` · ${escHtml(ev.cwd)}` : '';
+      flowAppend(`<div class="flow-evt system"><span class="glyph">▶</span>session <code style="color:#fbbf24">${escHtml(sid)}</code> · model <code style="color:#60a5fa">${escHtml(ev.model||'?')}</code>${cwd}</div>`);
+      return;
+    }
+
+    if (t === 'assistant') {
+      const content = ev.message?.content || [];
+      for (const block of content) {
+        if (block.type === 'thinking') {
+          const txt = block.thinking || '';
+          const preview = txt.split('\n')[0].slice(0, 140);
+          flowAppend(`<div class="flow-evt thinking"><details><summary><span class="glyph">🧠</span><span class="label">thinking</span><span class="preview">${escHtml(preview)}${txt.length > 140 ? '…' : ''}</span></summary><span class="full">${escHtml(txt)}</span></details></div>`);
+        } else if (block.type === 'text') {
+          const text = block.text || '';
+          if (!text.trim()) continue;
+          flowAppend(`<div class="flow-evt text">${renderMarkdown(text)}</div>`);
+        } else if (block.type === 'tool_use') {
+          _lastToolName = block.name;
+          const args = formatToolInput(block.name, block.input);
+          flowAppend(`<div class="flow-evt tool"><span class="glyph">→</span><span class="name">${escHtml(block.name)}</span><span class="args">${escHtml(args)}</span></div>`);
+        }
+      }
+      return;
+    }
+
+    if (t === 'user') {
+      const content = ev.message?.content || [];
+      for (const block of content) {
+        if (block.type === 'tool_result') {
+          const isErr = block.is_error === true;
+          let body = '';
+          if (typeof block.content === 'string') body = block.content;
+          else if (Array.isArray(block.content)) body = block.content.map(c => c.text || c.content || '').join('');
+          const summary = summarizeResult(_lastToolName, body, isErr);
+          const glyph = isErr ? '✗' : '←';
+          flowAppend(
+            `<div class="flow-evt tool-result${isErr?' error':''}"><details>` +
+              `<summary><span class="glyph">${glyph}</span><span class="summary-text">${escHtml(summary)}</span></summary>` +
+              `<span class="full">${escHtml(body.slice(0, 4000))}${body.length > 4000 ? '\n\n…(truncated)' : ''}</span>` +
+            `</details></div>`
+          );
+        }
+      }
+      return;
+    }
+
+    if (t === 'result') {
+      const dur = ev.duration_ms ? `${(ev.duration_ms/1000).toFixed(1)}s` : '';
+      const cost = ev.total_cost_usd != null ? `$${ev.total_cost_usd.toFixed(4)}` : '';
+      const turns = ev.num_turns != null ? `${ev.num_turns} turn${ev.num_turns===1?'':'s'}` : '';
+      const tokens = ev.usage ? `${ev.usage.input_tokens||0}↑ / ${ev.usage.output_tokens||0}↓ tok` : '';
+      const isErr = ev.is_error === true;
+      flowAppend(`<div class="flow-evt result"><span class="glyph">${isErr?'✗':'✓'}</span>${isErr?'failed':'done'}<span class="meta">${[dur,cost,turns,tokens].filter(Boolean).map(x=>`<b>${escHtml(x)}</b>`).join(' · ')}</span></div>`);
+      return;
+    }
+  };
+
+  const appendOut = (text, kind = 'stdout') => {
+    if (el.body.querySelector('.idle-msg')) el.body.innerHTML = '';
+    // RAW view container (always populated, hidden when flow mode active via CSS)
+    let raw = el.body.querySelector('.raw');
+    if (!raw) { raw = document.createElement('div'); raw.className = 'raw'; el.body.appendChild(raw); }
+    const span = document.createElement('span');
+    span.className = `out-line ${kind}`;
+    span.textContent = text.endsWith('\n') ? text : text + '\n';
+    raw.appendChild(span);
+
+    // Try to parse as JSON for FLOW view
+    if (kind === 'stdout') {
+      const trimmed = text.trim();
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        try { renderFlowEvent(JSON.parse(trimmed)); } catch (_) { flowAppend(`<div class="flow-evt"><span class="body">${escHtml(text)}</span></div>`); }
+      } else if (trimmed) {
+        flowAppend(`<div class="flow-evt"><span class="body">${escHtml(text)}</span></div>`);
+      }
+    } else if (kind === 'stderr' && text.trim()) {
+      flowAppend(`<div class="flow-evt error"><span class="glyph">⚠</span><span class="label">stderr</span><span class="body">${escHtml(text)}</span></div>`);
+    } else if (kind === 'meta') {
+      flowAppend(`<div class="flow-evt system"><span class="body">${escHtml(text)}</span></div>`);
+    }
+
+    if (state.stickyScroll) el.body.scrollTop = el.body.scrollHeight;
+  };
+
+  const appendDoneRule = () => {
+    const hr = document.createElement('hr');
+    hr.className = 'done-rule';
+    const raw = el.body.querySelector('.raw'); if (raw) raw.appendChild(hr);
+    flowAppend(`<div class="flow-evt system"><span class="glyph">━</span><span class="body">stream closed</span></div>`);
+    if (state.stickyScroll) el.body.scrollTop = el.body.scrollHeight;
+  };
+
+  // -------- sticky scroll --------
+  el.body.addEventListener('scroll', () => {
+    const nearBottom = el.body.scrollHeight - el.body.scrollTop - el.body.clientHeight < 24;
+    state.stickyScroll = nearBottom;
+  });
+
+  // -------- char count --------
+  const updateCount = () => {
+    const n = el.promptEl.value.length;
+    el.charCount.textContent = `${n} chars`;
+    setDispatchEnabled(state.job === null);
+  };
+  el.promptEl.addEventListener('input', updateCount);
+
+  // -------- model picker --------
+  el.modelBtns.forEach(b => {
+    b.addEventListener('click', () => {
+      el.modelBtns.forEach(x => { x.classList.remove('active'); x.setAttribute('aria-checked', 'false'); });
+      b.classList.add('active'); b.setAttribute('aria-checked', 'true');
+      state.model = b.dataset.model;
+      el.modelCost.textContent = COST[state.model];
+    });
+  });
+
+  // -------- yolo / blank toggles --------
+  const yoloBtn = document.getElementById('yolo-toggle');
+  const blankBtn = document.getElementById('blank-toggle');
+  yoloBtn.addEventListener('click', () => {
+    state.yolo = !state.yolo;
+    yoloBtn.setAttribute('aria-pressed', state.yolo ? 'true' : 'false');
+  });
+  blankBtn.addEventListener('click', () => {
+    state.blank = !state.blank;
+    blankBtn.setAttribute('aria-pressed', state.blank ? 'true' : 'false');
+  });
+
+  // -------- viewer mode toggle (flow / raw) --------
+  document.querySelectorAll('.view-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.view-btn').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-checked', 'false'); });
+      b.classList.add('active'); b.setAttribute('aria-checked', 'true');
+      state.view = b.dataset.view;
+      el.body.classList.toggle('mode-raw', state.view === 'raw');
+      el.body.classList.toggle('mode-flow', state.view === 'flow');
+    });
+  });
+  el.body.classList.add('mode-flow');
+
+  // -------- timer --------
+  const startTimer = (startedAt) => {
+    const start = startedAt ? new Date(startedAt).getTime() : Date.now();
+    state.timer = setInterval(() => {
+      el.elapsed.textContent = fmtElapsed(Date.now() - start);
+    }, 250);
+  };
+  const stopTimer = () => { if (state.timer) { clearInterval(state.timer); state.timer = null; } };
+
+  // -------- recent jobs --------
+  const renderRecent = (jobs) => {
+    const strip = el.recent;
+    strip.innerHTML = '<span class="recent-label">recent</span>';
+    if (!jobs || jobs.length === 0) {
+      const e = document.createElement('span');
+      e.className = 'hint'; e.textContent = 'no jobs yet';
+      strip.appendChild(e);
+      return;
+    }
+    const last5 = jobs.slice(-5).reverse();
+    last5.forEach(j => {
+      const chip = document.createElement('span');
+      chip.className = 'recent-chip';
+      const status = (j.status || 'done').toLowerCase();
+      chip.innerHTML = `<span class="rdot ${status}"></span><span>${j.id || j.job_id || '?'}</span>`;
+      chip.title = `${j.model || ''} · ${status}`;
+      chip.addEventListener('click', () => replayJob(j.id || j.job_id, j.model));
+      strip.appendChild(chip);
+    });
+  };
+
+  const refreshRecent = async () => {
+    try {
+      const r = await fetch('/api/jobs');
+      if (!r.ok) return;
+      const data = await r.json();
+      renderRecent(data.jobs || []);
+    } catch (_) { /* silent */ }
+  };
+
+  // -------- stream attach --------
+  const attachStream = (jobId, model) => {
+    if (state.es) { try { state.es.close(); } catch (_) {} }
+    state.finalized = false;
+
+    const es = new EventSource(`/api/jobs/${jobId}/stream`);
+    state.es = es;
+
+    es.onmessage = (ev) => {
+      let payload;
+      try { payload = JSON.parse(ev.data); }
+      catch (_) { appendOut(ev.data); return; }
+
+      const t = payload.type;
+      if (t === 'stdout')      appendOut(payload.data || '', 'stdout');
+      else if (t === 'stderr') appendOut(payload.data || '', 'stderr');
+      else if (t === 'done')   finalize('done');
+    };
+
+    es.onerror = () => {
+      // EventSource will auto-close after stream ends; only treat as error if we haven't finalized.
+      if (!state.finalized) {
+        // brief delay — sometimes a `done` event arrives just before close
+        setTimeout(() => { if (!state.finalized) finalize('done', /*silent*/ true); }, 250);
+      }
+      try { es.close(); } catch (_) {}
+    };
+  };
+
+  const finalize = (kind /* done|killed|error */, silent = false) => {
+    if (state.finalized) return;
+    state.finalized = true;
+    if (state.es) { try { state.es.close(); } catch (_) {} state.es = null; }
+    stopTimer();
+    if (kind === 'done')        { setStatus('done', 'done'); }
+    else if (kind === 'killed') { setStatus('killed', 'killed'); }
+    else                        { setStatus('error', 'error'); }
+    if (!silent) appendDoneRule();
+    setKillEnabled(false);
+    state.job = null;
+    setDispatchEnabled(true);
+    refreshRecent();
+  };
+
+  // -------- replay (recent click) --------
+  const replayJob = (jobId, model) => {
+    if (state.job) {
+      showError('Job in progress — kill it before replaying.');
+      return;
+    }
+    el.body.innerHTML = '';
+    el.jobId.textContent = jobId;
+    if (model) {
+      el.jobModel.style.display = 'inline-block';
+      el.jobModel.className = `model-badge ${model}`;
+      el.jobModel.textContent = model;
+    }
+    setStatus('running', 'replay');
+    setKillEnabled(false); // can't kill a replay (already finished)
+    state.job = { id: jobId, model, started_at: null };
+    state.finalized = false;
+    attachStream(jobId, model);
+    // when replay ends, finalize will mark done
+  };
+
+  // -------- dispatch --------
+  const dispatch = async () => {
+    const prompt = el.promptEl.value.trim();
+    if (!prompt) return;
+    if (state.job) return;
+
+    setDispatchEnabled(false);
+    setKillEnabled(false);
+    setStatus('running', 'dispatching');
+    el.body.innerHTML = '';
+    appendOut(`[dispatching to ${state.model}]`, 'meta');
+
+    const body = { prompt, model: state.model };
+    const sys = el.sysEl.value.trim();
+    if (sys) body.system_prompt = sys;
+    if (state.yolo) body.yolo = true;
+    if (state.blank) body.blank_mode = true;
+
+    try {
+      const r = await fetch('/api/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = data.error || `dispatch failed (${r.status})`;
+        showError(msg);
+        appendOut(`[error] ${msg}`, 'stderr');
+        setStatus('error', 'error');
+        setDispatchEnabled(true);
+        return;
+      }
+
+      state.job = { id: data.job_id, model: data.model || state.model, started_at: data.started_at };
+      el.jobId.textContent = data.job_id;
+      el.jobModel.style.display = 'inline-block';
+      el.jobModel.className = `model-badge ${state.job.model}`;
+      el.jobModel.textContent = state.job.model;
+      setStatus('running', 'running');
+      setKillEnabled(true);
+      startTimer(data.started_at);
+      attachStream(data.job_id, state.job.model);
+      refreshRecent();
+    } catch (e) {
+      showError(`network error: ${e.message}`);
+      setStatus('error', 'error');
+      setDispatchEnabled(true);
+    }
+  };
+
+  // -------- kill --------
+  const kill = async () => {
+    if (!state.job) return;
+    setKillEnabled(false);
+    try {
+      const r = await fetch(`/api/jobs/${state.job.id}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        showError(data.error || `kill failed (${r.status})`);
+        setKillEnabled(true);
+        return;
+      }
+      // EventSource auto-closes when stream ends; just mark killed locally.
+      finalize('killed');
+    } catch (e) {
+      showError(`network error: ${e.message}`);
+      setKillEnabled(true);
+    }
+  };
+
+  el.dispatchBtn.addEventListener('click', dispatch);
+  el.killBtn.addEventListener('click', kill);
+
+  // -------- shortcuts --------
+  document.addEventListener('keydown', (e) => {
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && (e.key === 'k' || e.key === 'K')) {
+      e.preventDefault();
+      el.promptEl.focus();
+      el.promptEl.select();
+    }
+    if (ctrl && e.key === 'Enter') {
+      e.preventDefault();
+      if (!el.dispatchBtn.disabled) dispatch();
+    }
+  });
+
+  // -------- init --------
+  updateCount();
+  refreshRecent();
+  // poll recent every 8s so finished jobs from elsewhere appear
+  setInterval(refreshRecent, 8000);
+})();
+</script>
+
+</body>
+</html>

@@ -12,7 +12,11 @@ The orchestrator merges these JSON objects deep — keys present in higher-prior
 
 ## Editing settings via `/swarm-config`
 
-The recommended way to edit settings is the `/swarm-config` slash command. It:
+> **How `/swarm-config` actually works:** it is **not** a registered Claude Code slash command (there is no `commands/swarm-config.md` shim). It is an **intent trigger** the skill recognizes. When the swarm-orchestrator skill is loaded into the session and you type `/swarm-config` (or natural-language equivalents like "open swarm config", "edit swarm settings"), the orchestrator follows the recipe below from `SKILL.md`. If the skill is not active in the session, `/swarm-config` will be treated as unknown input — load the skill first (it auto-loads on swarm-related triggers, or you can ask Claude to "use swarm-orchestrator").
+>
+> Direct alternative: edit `~/.claude/swarm-orchestrator/settings.json` with any text editor. The orchestrator reads it on every dispatch.
+
+The recommended interactive flow (when triggered):
 
 1. Reads the current effective settings (merges all 3 layers)
 2. Renders them as a markdown view annotated with which layer each value came from

@@ -73,9 +73,9 @@ Every muscle you dispatch gets:
 3. **An explicit scope** with "do NOT touch X" exclusions when other muscles are
    working neighboring areas
 
-See `docs/PROTOCOL.md` for the full 8-mitigation playbook and when to escalate.
+See `docs/PROTOCOL.md` for the full 9-mitigation playbook and when to escalate.
 See `templates/` for copy-paste prompt shapes.
-See `docs/SETTINGS.md` for configurable behavior; run `/swarm-config` to edit.
+See `docs/SETTINGS.md` for configurable behavior; run `/swarm-config` to edit (or edit `~/.claude/swarm-orchestrator/settings.json` directly — see the note in `SETTINGS.md` about how `/swarm-config` is implemented as an intent trigger, not a registered slash-command file).
 See `docs/MEMORY-TIERS.md` for the Identity/Operations/Knowledge memory model.
 
 ### Default safety mapping
@@ -149,6 +149,40 @@ The orchestrator follows this sequence on every dispatch. Settings (Patch 9)
 gate optional steps. Memory (Patch 10) persists artifacts to operations/ and
 indexes to knowledge/.
 
+### Step 0.0 — Local-first reconnaissance (mandatory, before anything else)
+
+Before loading settings, before knowledge recall, before any decomposition or dispatch — **dispatch a cheap Haiku** for a focused local-filesystem scan. Cap: ~5–10s, ~5K tokens, read-only.
+
+```python
+# Skip only if: trivial conversational reply, user provided explicit path,
+# or topic is obviously generic public knowledge with no on-disk footprint.
+if not is_trivial(user_prompt) and not user_provided_path(user_prompt):
+    scan = dispatch_haiku(
+        prompt=LOCAL_SCAN_TEMPLATE.format(topic=extract_topic(user_prompt)),
+        cap_tokens=5000,
+        cap_seconds=10,
+        read_only=True,
+    )
+    # scan returns: list of relevant paths + 1-line summary, OR "nothing relevant on disk"
+    sess.write_artifact("local-scan.md", scan.report)
+    grounded_context = scan.relevant_paths  # feed into Step 1 decomposition
+```
+
+The scan template globs `**/AGENTS.md`, `**/CLAUDE.md`, `**/SKILL.md`, `**/PROJECT.md`, `**/<topic>*`, `**/.<topic>*`; greps `~/.claude/projects/.../memory/` and `~/.claude/skills/`; runs `where <cmd>` for any tool name in the prompt; checks `AppData`, `~/.config`, `Program Files`.
+
+**Why this is Step 0.0 and not Step 0.5:** knowledge recall searches *past swarm runs*. Local-first reconnaissance searches *the user's actual current setup* — different source, different (lower) cost, different (higher) authority. Both run; this one runs first.
+
+**Order of escalation enforced by this step:**
+1. Memory + loaded context (free, already in your head)
+2. Step 0.0 — Haiku local scan (this step)
+3. Targeted Read/Grep on paths the scan surfaced
+4. Step 0+ — settings, knowledge recall, decomposition, dispatch
+5. WebSearch/WebFetch only if Step 0.0 + targeted Read came back empty
+
+**Anti-pattern blocked by this step:** dispatching parallel Sonnet/Haiku research muscles or WebSearch as the *opening* move on a question about Ron's tools / repos / setup. The cheap local probe nearly always grounds the question and shrinks the downstream swarm.
+
+See: `~/.claude/CLAUDE.md` "Local-First Reconnaissance" section, and `~/.claude/projects/C--Users-ronsh-Desktop-Ron-s-Brain/memory/feedback_unknown_tool_haiku_scan_first.md`.
+
 ### Step 0 — Load settings
 
 ```python
@@ -157,6 +191,45 @@ settings = load_settings()  # resolves user > skill-local > defaults
 session_id = new_session_id()
 sess = operations.start(session_id, task_text=user_prompt)
 ```
+
+### Step 0.1 — Load addons (always, before any dispatch)
+
+```python
+from lib.addons import load_addons
+registry = load_addons(
+    settings,
+    skill_dir=Path(__file__).parent,
+    workspace_dir=Path.cwd(),
+)
+# Apply addon model-tier overrides on top of base capability_map
+capability_map = registry.apply_model_tier_overrides(settings.get("capability_map", {}))
+```
+
+The registry is now in scope for the whole session. Subsequent steps query it
+to find skills (`registry.find_skill_by_trigger(user_prompt)`), recipes
+(`registry.find_recipe(name)`), or addon-claimed triggers
+(`registry.find_addon_by_trigger(user_prompt)`).
+
+### Step 0.2 — Addon trigger match (before knowledge recall)
+
+If an addon's `triggers:` block matches the user's input, route to that
+addon's recipe immediately — these are the natural-language entry points
+addons declared they can handle.
+
+```python
+match = registry.find_addon_by_trigger(user_prompt)
+if match is not None:
+    addon, captured = match            # captured = named regex groups
+    # e.g. auto-adapter captures {"repo": "/path/to/MachineGuides"}
+    confirm_with_user(addon, captured)
+    if user_confirmed():
+        recipe = first_recipe_in_addon(addon)
+        run_recipe(recipe, captured)
+        return  # short-circuit; don't fall through to generic decomposition
+```
+
+Confirmation phrasing (Hebrew or English depending on user language):
+> *"אני רוצה להריץ את `learn-repo` של auto-adapter על `/path/to/MachineGuides`. ירוצו 5 סוכנים. אישור?"*
 
 ### Step 0.5 — Knowledge recall (configurable)
 
@@ -178,6 +251,18 @@ as starting point with focused agents on gaps. Fresh = full swarm, ignore past.
 Pick tier per `docs/MODEL-TIERS.md` (default up when ambiguous). Apply
 `models.force_opus_for` settings. Dispatch all muscles in parallel.
 
+```python
+# Fire pre-dispatch hooks so addons can observe / log / audit
+for agent in planned_agents:
+    registry.run_hooks("dispatch_start", {
+        "session_id": session_id,
+        "agent_id": agent.id,
+        "model": agent.model,
+        "safety": agent.safety,
+        "prompt_summary": agent.prompt[:200],
+    })
+```
+
 ### Step 2 — Per-muscle return processing
 
 For each muscle as it returns:
@@ -198,7 +283,38 @@ for tool, min_count in floor.items():
             redispatch_on_higher_tier(muscle, reason='anomaly')
         elif settings.discipline.anomaly_detection == 'warn':
             flag_for_synthesis_caveat(muscle, tool, expected=min_count, actual=...)
+
+# Fire return hooks so addons can observe per-muscle outcomes
+registry.run_hooks("agent_returned", {
+    "session_id": session_id,
+    "agent_id": muscle.id,
+    "model": muscle.model,
+    "confidence": meta.get("confidence"),
+    "tools_used": meta.get("tools_used"),
+    "anomaly": locals().get("anomaly_flag"),
+})
 ```
+
+### Step 2.5 — Artifact verification (mitigation #9)
+
+For each agent that declares an `artifacts` field in its META block, stat every listed path on disk before proceeding. Apply behavior per `discipline.artifact_verification.mode`:
+
+```python
+if settings.discipline.artifact_verification['mode'] != 'off':
+    for path in agent.meta.get('artifacts', []):
+        size = os.path.getsize(path) if os.path.exists(path) else -1
+        if size < settings.discipline.artifact_verification['min_size_bytes']:
+            mode = settings.discipline.artifact_verification['mode']
+            if mode == 'block':
+                flag_agent_as_failed(agent,
+                    reason=f"VERIFICATION FAILED: {path} missing or empty")
+                redispatch_on_higher_tier(agent, tightened_prompt=True)
+            elif mode == 'warn':
+                flag_for_synthesis_caveat(agent,
+                    f"VERIFICATION FAILED: {path}")
+```
+
+Re-dispatch (block mode) uses a tightened prompt that explicitly names the permission barrier observed. If the re-dispatch also fails verification, surface the failure to the user verbatim — do not relay any "DONE:" claim from that agent. See `docs/PROTOCOL.md` mitigation #9 and `defaults.json` for configuration.
 
 ### Step 3 — Spot-check (mandatory artifact for [M]/[H])
 
@@ -246,6 +362,17 @@ Produce the merged report. Flag anything unverified. Apply soft remediations:
 - Inject cross-link findings block before the synthesis when contradictions exist
 - Quote the reviewer's flagged concerns with "Reviewer flagged:" prefix
 
+```python
+# Fire synthesis-done hook (addons can post to Slack, write to memory, etc.)
+registry.run_hooks("synthesis_done", {
+    "session_id": session_id,
+    "total_tokens": total_tokens,
+    "wall_clock_s": wall_clock_s,
+    "agents_count": len(reports),
+    "recipe": recipe_name,
+})
+```
+
 ### Step 7 — Cost report (settings-gated)
 
 Compute the cost report (always written to operations dir for the record).
@@ -258,7 +385,7 @@ See `templates/cost-report.md`.
 
 ### Step 8 — Synthesis quality gate (capstone, mitigation #8)
 
-Run the 7-item self-check. If any check fails, apply remediation; if any hard
+Run the 8-item self-check. If any check fails, apply remediation; if any hard
 block fails, do not publish. See `templates/synthesis-gate.md`.
 
 ```python
@@ -303,6 +430,41 @@ python app.py
 
 See `packages/swarm-dashboard/README.md` for full setup and customization.
 
+## The floating widget (optional, complements the dashboard)
+
+A small frameless desktop popup that sits on top of any window stack,
+showing live swarm activity in your peripheral vision while you work.
+Built on PySide6 + QWebChannel; subscribes to the dashboard's `/stream`
+endpoint via a Python proxy thread (CORS-bypassed, in-process IPC to JS).
+
+**Lives at:** `~/Desktop/swarm-widget-popup.py` (launcher) +
+`~/Desktop/Swarm Widget.lnk` (clickable Windows shortcut, generated by
+`install-swarm-shortcut.ps1`).
+
+**Three feed modes:**
+- **Demo** — simulated agents on a loop with code-flavored recipes (build-react-feature,
+  fix-failing-tests, refactor-auth-flow, scaffold-mcp-server, etc.). For visual testing.
+- **Live · dashboard SSE** — Python proxy connects to `http://127.0.0.1:5173/stream`,
+  filters to the top-10 currently-running non-parent agents, drops stale
+  ones (>30s with 0 tools, >60s since last tool), pushes diff-based
+  inject calls to the widget UI.
+- **Live · Claude Code session tail** — directly tails
+  `~/.claude/projects/.../subagents/agent-*.jsonl` files when the
+  dashboard is offline. Same widget surface, different transport.
+
+**Window controls:** frameless, draggable header, resizable edges,
+overflow menu (`⋯`) for pin / blur / minimize / maximize / settings.
+Settings panel: opacity slider, UI scale, snap-to-corner, follow-Claude
+toggle (popup is on-top only when `Antigravity.exe` / `Claude.exe` /
+`WindowsTerminal.exe` / `Code.exe` is foreground).
+
+**Settings persist** to `~/.claude/swarm-widget/settings.json`.
+
+**Why it complements the dashboard:** the dashboard is a full browser
+panel (deep history, tool traces, callsigns); the widget is the
+peripheral indicator that tells you "3 agents running, $0.04 spent,
+oldest done in ~15s" without leaving the app you're working in. Run both.
+
 ## Worked example
 
 User says: "audit MachineGuides for dead code / duplicates / orphans."
@@ -325,16 +487,86 @@ User says: "audit MachineGuides for dead code / duplicates / orphans."
 Cost: ~$1.80 vs ~$50–100 for single Opus 1M doing it sequentially. Wall time:
 ~7 min vs ~15 min. See `docs/COST-BENCHMARK.md` for the math.
 
+## Addons — extend the swarm without forking it
+
+Addons let you graft new skills, recipes, templates, workflows, model-tier
+overrides, and lifecycle hooks onto the swarm-orchestrator. Core skill ships
+the discipline; addons ship the domain.
+
+**Where addons live (load order, later overrides earlier):**
+
+1. `<skill-dir>/addons/` — built-in (e.g., `_core/auto-adapter`)
+2. `~/.claude/swarm-orchestrator/addons/` — user-installed
+3. `<workspace>/.swarm/addons/` — project-scoped
+
+See `docs/ADDONS.md` for the full design memo, manifest schema, and authoring guide.
+
+### Auto-load at session start
+
+When this skill activates, the orchestrator (you) calls
+`load_addons()` from `lib/addons.py`. Every discovered manifest with
+`status: enabled` is registered. Skills, recipes, templates, workflows, and
+model-tier overrides become available transparently — same code paths as
+built-in protocol assets, just contributed by an addon.
+
+### `/swarm-addons` command surface
+
+Concrete handler recipes (step-by-step Bash + file ops) for every subcommand
+live in `docs/ADDONS-COMMANDS.md`. Read that file when invoking any of these.
+
+When the user types one of these, you handle it directly (no separate command
+file needed in v1):
+
+| Command | Effect |
+|---|---|
+| `/swarm-addons list` | Show discovered addons with status / version / priority / contributions |
+| `/swarm-addons info <name>` | Manifest summary + file list |
+| `/swarm-addons enable <name>` | Set settings.disabled to remove this name; reload registry |
+| `/swarm-addons disable <name>` | Add to settings.disabled; reload registry |
+| `/swarm-addons doctor` | Validate every manifest, report missing files, version mismatches, hook errors |
+| `/swarm-addons learn <repo-path>` | Invoke the built-in `auto-adapter` addon's `learn-repo` recipe |
+| `/swarm-addons install <git-url-or-path>` | `git clone` (or copy) into `~/.claude/swarm-orchestrator/addons/<name>/`, run doctor, report. **No automatic `npm install` / `pip install`.** |
+| `/swarm-addons remove <name>` | Move addon dir to `~/.claude/swarm-orchestrator/addons/_archive/<ts>_<name>/`. Never `rm -rf`. |
+
+### Built-in: `auto-adapter` (the "learn this repo" capability)
+
+The skill ships with one built-in addon at `addons/_core/auto-adapter/`. It
+listens for triggers like:
+
+- `"adapt to <path>"`, `"learn this repo: <path>"`, `"build addon for <path>"`,
+  `"onboard <path> into the swarm"` (English)
+- `"תלמדי את <path>"`, `"תתאימי ל-<path>"`, `"תבני אדאון ל-<path>"`,
+  `"תאמצי את <path>"` (Hebrew)
+- `/swarm-addons learn <path>`
+
+When matched, you dispatch the `learn-repo` recipe — 3 inventory/extraction
+muscles (sonnet) + 1 synthesis muscle (opus, sole writer) + 1 doctor (opus,
+read-only). Output: a draft addon at
+`~/.claude/swarm-orchestrator/addons/<repo-name>-bundle/` with
+`status: disabled` (safety gate). User reviews, then runs `/swarm-addons enable`.
+
+See `addons/_core/auto-adapter/README.md` for the full flow.
+
+### Authoring rules
+
+- An addon is a folder with `addon.yaml` + any of: `skills/`, `recipes/`,
+  `templates/`, `workflows/`, `model-tiers-overrides.yaml`, `hooks/`, `docs/`.
+- Generated addons (from `auto-adapter`) ship `status: disabled`. Never
+  auto-enable a generated addon — the user reviews first.
+- Addons cannot disable core protocol rules, bypass the synthesis gate, or
+  modify the dashboard's Flask app. They extend; they do not subvert.
+
 ## Reference docs
 
 - `docs/ARCHITECTURE.md` — the brain-and-muscles model in detail
 - `docs/MODEL-TIERS.md` — when to use Haiku/Sonnet/Opus/Ollama, decision table
-- `docs/PROTOCOL.md` — the 8 mitigations (reviewer, escalation, spot-check,
-  model-match, typed outputs, anomaly detection, cross-pollination, synthesis gate)
+- `docs/PROTOCOL.md` — the 9 mitigations (reviewer, escalation, spot-check,
+  model-match, typed outputs, anomaly detection, cross-pollination, synthesis gate, artifact verification)
 - `docs/COST-BENCHMARK.md` — framework vs single-Opus 1M, real numbers
 - `docs/RECIPES.md` — reusable swarm patterns + tool-use floors
 - `docs/SETTINGS.md` — every configurable knob, defaults vs overrides, `/swarm-config`
 - `docs/MEMORY-TIERS.md` — Identity/Operations/Knowledge architecture
+- `docs/ADDONS.md` — addon system: manifest schema, search order, hooks, `/swarm-addons` commands
 
 ## Reference templates
 
@@ -344,7 +576,7 @@ Cost: ~$1.80 vs ~$50–100 for single Opus 1M doing it sequentially. Wall time:
 - `templates/meta-block.md` — the required META footer contract (incl. `tools_used`)
 - `templates/spot-check.md` — mandatory artifact for [M]/[H]
 - `templates/cost-report.md` — end-of-run cost block, latency timeline
-- `templates/synthesis-gate.md` — pre-publish 7-item self-check
+- `templates/synthesis-gate.md` — pre-publish 8-item self-check
 
 ## Library
 
@@ -366,7 +598,8 @@ Cost: ~$1.80 vs ~$50–100 for single Opus 1M doing it sequentially. Wall time:
 6. **Cross-pollinate on N ≥ 4** to catch contradictions one muscle can't see.
 7. **Reviewer triggers dynamically** on confidence-low, variance-high, anomaly, or cross-link contradiction — not just `[H]`.
 8. **Synthesis quality gate is the capstone.** Run before publish; soft-remediate or hard-block.
-9. **Flag unverified findings.** Confident-shallow is worse than missing.
-10. **Keep scopes non-overlapping.** Muscles must not trample each other.
-11. **Synthesize with honesty.** If the swarm returned thin results, say so.
-12. **Always promote to Knowledge** after synthesis — your future self will thank you when Step 0.5 surfaces "we've done this before."
+9. **Verify artifacts on disk before trusting agent reports.** A permission denial returning success-shaped stdout is fabrication, not success.
+10. **Flag unverified findings.** Confident-shallow is worse than missing.
+11. **Keep scopes non-overlapping.** Muscles must not trample each other.
+12. **Synthesize with honesty.** If the swarm returned thin results, say so.
+13. **Always promote to Knowledge** after synthesis — your future self will thank you when Step 0.5 surfaces "we've done this before."

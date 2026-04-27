@@ -46,7 +46,7 @@ sample_size: N or "exhaustive"
 
 - `{{SAFETY}}` — `L`, `M`, or `H`. See `docs/PROTOCOL.md` for decision.
 - `{{SECTION_TITLE}}` — short title (e.g., "Section A - web app")
-- `{{ROOT}}` — absolute path (e.g., `C:\Users\ronsh\Desktop\MachineGuides`)
+- `{{ROOT}}` — absolute path (e.g., `C:\Users\<you>\Desktop\YourProject` on Windows or `~/Desktop/YourProject` on macOS/Linux)
 - `{{INCLUDE_LIST}}` — bulleted list of paths IN scope. Example:
   ```
   - web/

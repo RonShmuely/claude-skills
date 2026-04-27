@@ -1,6 +1,6 @@
 # Cost Benchmark — Framework vs Single Opus 1M Extra High
 
-Reference workload: **audit a 29,473-file project in 5 non-overlapping sections** (real case, MachineGuides repo).
+Reference workload: **audit a 29,473-file project in 5 non-overlapping sections** (real-world case study, a documentation-heavy repo audited in production use).
 
 ## Headline numbers
 

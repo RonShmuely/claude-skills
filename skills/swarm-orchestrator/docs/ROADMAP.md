@@ -2,7 +2,7 @@
 
 The north-star plan for evolving the swarm framework into an always-on, multi-channel, self-improving local orchestrator.
 
-Target stack: **antigravity + openclaw + hermes + claudecode** — four ingredients, no visual canvas. Recipes stay as markdown + code (version-controlled, diff-able, syncable). No Ollama tier — Haiku rates are cheap enough that the $50–200/yr cost is trivial vs the engineering overhead of maintaining a local model integration. Four tiers: Opus orchestrator, Opus heavy muscle, Sonnet specialist, Haiku swarm.
+Target stack: **antigravity + claudecode** dispatch surfaces, plus the swarm framework's discipline (model-tier selection, 9 mitigations, ship-don't-ask preamble). No visual canvas. Recipes stay as markdown + code (version-controlled, diff-able, syncable). No Ollama tier — Haiku rates are cheap enough that the $50–200/yr cost is trivial vs the engineering overhead of maintaining a local model integration. Four tiers: Opus orchestrator, Opus heavy muscle, Sonnet specialist, Haiku swarm.
 
 ---
 
@@ -10,7 +10,7 @@ Target stack: **antigravity + openclaw + hermes + claudecode** — four ingredie
 
 **Done:**
 - Claude Code as execution engine, Agent tool dispatch
-- swarm-orchestrator skill shipped to [github.com/RonShmuely/claude-skills](https://github.com/RonShmuely/claude-skills)
+- swarm-orchestrator skill shipped to the public `claude-skills` repo
 - 5 docs (ARCHITECTURE, MODEL-TIERS, PROTOCOL, COST-BENCHMARK, RECIPES)
 - 4 prompt templates (meta-block, inventory, audit, reviewer)
 - SWARM-PROTOCOL dispatch playbook with 5 mitigations
@@ -23,7 +23,7 @@ Target stack: **antigravity + openclaw + hermes + claudecode** — four ingredie
 - Multi-channel adapter (Telegram bot → phone ingress)
 - Persistent memory across sessions (beyond MEMORY.md)
 - Scheduled triggers (cron-like autonomous runs)
-- Self-improvement loop (Hermes-style pattern detection → recipe promotion)
+- Self-improvement loop (pattern detection → recipe promotion)
 - Natural-language shell ("just tell it what you want")
 
 ---
@@ -34,13 +34,8 @@ Before any new building:
 
 | Task | Time | Why |
 |---|---|---|
-| Rotate Google OAuth credential in Downloads | 20 min | Security — urgent from Week-Start Triage |
-| Git-init MachineGuides + Ron's Brain | 1 hr | Business risk; "never delete, only archive" rule replaces what git should be doing |
-| Push integrated 3-mode dashboard to claude-skills | 5 min | Close this session's outstanding work |
+| Push integrated 3-mode dashboard to claude-skills | 5 min | Close outstanding repo work |
 | Junction-install skill into `~/.claude/skills/` | 2 min | Auto-activation on cold sessions |
-| Individualize Bobcat/Gehl SPN172 hypothesis | 30 min | Diagnostic integrity — two identical specs on different fleet machines |
-
-**Stop — don't start Sprint 1 until these are done.** None of the below matters if the foundation has unsecured credentials + untracked critical work.
 
 ---
 
@@ -92,7 +87,7 @@ Before any new building:
   - *"this muscle has returned `not_checked: ['hebrew OCR']` five times → add OCR step to its prompt"*
 - Proposals land in Telegram as approve/reject inline buttons
 - Approved proposals auto-commit to `claude-skills` repo with attribution
-- **Ships:** the Hermes capstone — the system improves itself
+- **Ships:** the capstone — the system improves itself
 
 Do not ship Sprint 3 until you've used Sprints 1+2 for ≥2 weeks. The librarian needs real pattern volume to find anything interesting; running it on synthetic data wastes money and gives bad suggestions.
 
@@ -132,7 +127,7 @@ Decide once, don't retrofit later:
 
 | Decision | Options | My pick |
 |---|---|---|
-| Memory backend | SQLite (structured, queryable) vs JSONL append-log (dumb, durable, grep-able) | **SQLite** — Hermes-style pattern detection needs joins and aggregations |
+| Memory backend | SQLite (structured, queryable) vs JSONL append-log (dumb, durable, grep-able) | **SQLite** — pattern detection needs joins and aggregations |
 | Scheduler | Windows Task Scheduler (native, annoying) vs Python daemon (portable, you manage it) | **Python daemon** — portable across machines via Drive Mirror sync |
 | Voice input | Telegram native vs Whisper local vs skip | **Telegram native** for v1, Whisper if quality insufficient |
 | Self-improvement trust | Auto-commit proposals vs require approval for every change | **Approval-required** until you trust the librarian, then opt-in auto-commit per proposal type |
@@ -141,7 +136,7 @@ Decide once, don't retrofit later:
 
 ## Where I'd start if the time were mine
 
-1. **Pre-sprint today** (1–2 hrs) — OAuth rotation + git-init + dashboard push + skill junction. This is not optional.
+1. **Pre-sprint today** (1–2 hrs) — dashboard push + skill junction. This is not optional.
 2. **Sprint 1 tomorrow** (4–6 hrs) — memory store is the foundation for everything meaningful after.
 3. **Sprint 2 Phase 4 before Phase 3** — get the "feels different" hit from Telegram first. The scheduler adds value but isn't viscerally different. Telegram is.
 4. **Use the system for 2 weeks before Sprint 3** — don't build the librarian until you have real patterns for it to find.

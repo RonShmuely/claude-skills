@@ -1,0 +1,125 @@
+# learn-repo recipe — adapts the swarm to a target repo by reading it and
+# generating a fresh addon that captures its workflow + conventions.
+#
+# Inputs:
+#   target_repo: absolute path to the repo to learn
+#   addon_output_dir: where to write the generated addon (default: ~/.claude/swarm-orchestrator/addons/<repo-name>-bundle/)
+#
+# Outputs:
+#   A new addon folder with addon.yaml + skills/ + recipes/ + workflows/ + README.md
+#   A doctor report on the generated addon
+#   A summary the orchestrator presents to the user
+
+name: learn-repo
+description: Read a target repo, extract its workflow, and synthesize a new swarm-orchestrator addon.
+safety: M                          # produces files; medium-stakes, requires user confirmation before adopting
+parallelism: sequential-by-default # agents 1-3 can fan out; agent 4 (synthesis) needs all of them done first
+inputs:
+  - name: target_repo
+    type: path
+    required: true
+  - name: addon_output_dir
+    type: path
+    required: false
+    default: "~/.claude/swarm-orchestrator/addons/{repo_basename}-bundle"
+
+# ---------------------------------------------------------------------------
+# Stage 1: parallel inventory + extraction (3 muscles)
+# ---------------------------------------------------------------------------
+agents:
+
+  - id: repo-inventory
+    tier: sonnet
+    safety: L
+    template: templates/repo-inventory.md
+    inputs: { target_repo: "{{target_repo}}" }
+    expected_tools:
+      Glob: 3
+      Read: 8
+    description: "[L] Inventory repo structure, conventions, file types, build/run commands."
+
+  - id: workflow-extraction
+    tier: sonnet
+    safety: M
+    template: templates/workflow-extraction.md
+    inputs: { target_repo: "{{target_repo}}" }
+    expected_tools:
+      Read: 4
+      Grep: 2
+    description: "[M] Identify the recurring workflow pipeline — what this repo does on a typical day."
+
+  - id: domain-skills-synthesis
+    tier: sonnet
+    safety: M
+    template: templates/domain-skills-synthesis.md
+    inputs:
+      target_repo: "{{target_repo}}"
+      inventory: "@repo-inventory.final_text"
+      workflow: "@workflow-extraction.final_text"
+    description: "[M] Propose the skill set the swarm should add for this repo, with frontmatter triggers in user's language."
+    depends_on: [repo-inventory, workflow-extraction]
+
+# ---------------------------------------------------------------------------
+# Stage 2: synthesis (1 opus muscle, full context)
+# ---------------------------------------------------------------------------
+
+  - id: addon-synthesis
+    tier: opus
+    safety: H
+    template: templates/addon-synthesis.md
+    inputs:
+      target_repo: "{{target_repo}}"
+      addon_output_dir: "{{addon_output_dir}}"
+      inventory: "@repo-inventory.final_text"
+      workflow: "@workflow-extraction.final_text"
+      proposed_skills: "@domain-skills-synthesis.final_text"
+    description: "[H] Synthesize the addon: write addon.yaml + skills/*.md + recipes/*.yaml + workflows/*.md + README.md into the output dir."
+    depends_on: [repo-inventory, workflow-extraction, domain-skills-synthesis]
+    write_access: true             # this is the only agent allowed to create files
+    write_scope: "{{addon_output_dir}}"
+
+# ---------------------------------------------------------------------------
+# Stage 3: review (1 opus reviewer)
+# ---------------------------------------------------------------------------
+
+  - id: addon-doctor
+    tier: opus
+    safety: H
+    template: templates/addon-doctor.md
+    inputs:
+      addon_output_dir: "{{addon_output_dir}}"
+    description: "[H] Doctor pass on the generated addon — validate manifest, check file references, flag conflicts with existing addons."
+    depends_on: [addon-synthesis]
+
+# ---------------------------------------------------------------------------
+# Tool-use floors (used by anomaly detection)
+# ---------------------------------------------------------------------------
+recipe_floors:
+  repo-inventory:        { Glob: 3, Read: 8 }
+  workflow-extraction:   { Read: 4, Grep: 2 }
+  domain-skills-synthesis: {}
+  addon-synthesis:       { Write: 4 }      # at minimum: addon.yaml + 1 skill + 1 recipe + README
+  addon-doctor:          { Read: 5 }
+
+# ---------------------------------------------------------------------------
+# Synthesis presentation rules
+# ---------------------------------------------------------------------------
+synthesis:
+  language: same-as-user           # respond in whatever language the user invoked us in
+  format: |
+    ## הסוכן למד את {{repo_basename}} ✓
+
+    Generated addon at: {{addon_output_dir}}
+
+    Skills added: {{skill_count}}
+    Recipes added: {{recipe_count}}
+    Workflows added: {{workflow_count}}
+    Doctor verdict: {{doctor_status}}
+
+    To enable, run: /swarm-addons enable {{repo_basename}}-bundle
+    To inspect: /swarm-addons info {{repo_basename}}-bundle
+    To remove: /swarm-addons remove {{repo_basename}}-bundle
+  must_include:
+    - "user confirmation prompt before any /swarm-addons enable"
+    - "list of files written"
+    - "doctor warnings or errors verbatim"

@@ -1,10 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Cockpit · Swarm Orchestrator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='13' y='7' width='6' height='18' fill='%23e10600'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --crimson:      #E10600;
@@ -26,45 +29,42 @@
       linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
   }
 
-  /* Fancy hover tooltip system */
+  /* BiDi: Hebrew-capable fallback chain for dynamic agent / user content. */
+  :root { --font-bidi: 'JetBrains Mono', 'Geist Mono', 'Heebo', 'Segoe UI', system-ui, sans-serif; }
+  [dir="auto"], [dir="rtl"] { font-family: var(--font-bidi); }
+  [dir="auto"] { unicode-bidi: plaintext; }
+
+  /* Fancy hover tooltip system — JS-driven, appended to <body> to escape overflow:hidden ancestors */
   [data-tip] { position: relative; }
-  [data-tip]::after {
-    content: attr(data-tip); position: absolute;
-    top: calc(100% + 10px); left: 50%;
-    transform: translateX(-50%) translateY(-4px);
-    background: linear-gradient(180deg, #0a0a0a 0%, #060606 100%);
+  .__tip {
+    position: fixed; z-index: 99999; pointer-events: none;
+    background: #060606;
+    background-image:
+      linear-gradient(180deg, #0a0a0a 0%, #060606 100%),
+      linear-gradient(90deg, var(--crimson) 0 2px, transparent 2px 100%);
+    background-blend-mode: normal;
     border: 1px solid var(--crimson); color: #eee;
     padding: 9px 13px 9px 16px; border-radius: 4px;
     font-size: 11px; line-height: 1.5;
     font-family: 'JetBrains Mono', monospace; letter-spacing: 0.02em;
     white-space: normal; max-width: 320px; width: max-content;
-    z-index: 9999; pointer-events: none;
-    opacity: 0; visibility: hidden;
-    transition: opacity .15s ease, transform .15s ease;
     box-shadow: 0 0 24px rgba(225,6,0,.35), 0 6px 20px rgba(0,0,0,.6);
-    background-image: linear-gradient(90deg, var(--crimson) 0 2px, transparent 2px 100%);
+    opacity: 0; visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity .15s ease, transform .15s ease;
   }
-  [data-tip]::before {
+  .__tip.show { opacity: 1; visibility: visible; transform: translateY(0); }
+  .__tip::before {
     content: ''; position: absolute;
-    top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
-    border: 6px solid transparent; border-bottom-color: var(--crimson);
-    z-index: 9999; pointer-events: none;
-    opacity: 0; visibility: hidden; transition: opacity .15s ease;
+    left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent;
   }
-  [data-tip]:hover::after, [data-tip]:hover::before {
-    opacity: 1; visibility: visible;
-    transform: translateX(-50%) translateY(0);
-    transition-delay: .25s;
+  .__tip[data-pos="bottom"]::before {
+    top: -12px; border-bottom-color: var(--crimson);
   }
-  [data-tip-pos="top"]::after {
-    top: auto; bottom: calc(100% + 10px);
-    transform: translateX(-50%) translateY(4px);
+  .__tip[data-pos="top"]::before {
+    bottom: -12px; border-top-color: var(--crimson);
   }
-  [data-tip-pos="top"]::before {
-    top: auto; bottom: calc(100% + 4px);
-    border-bottom-color: transparent; border-top-color: var(--crimson);
-  }
-  [data-tip-pos="top"]:hover::after { transform: translateX(-50%) translateY(0); }
 
   /* Grid */
   .cockpit {
@@ -238,6 +238,13 @@
 </style>
 </head>
 <body>
+<style>
+  .__route_nav { position: fixed; top: 8px; right: 12px; z-index: 9999; display: inline-flex; gap: 2px; background: rgba(10,10,10,0.92); border: 1px solid #1a1a1a; border-radius: 6px; padding: 2px; backdrop-filter: blur(6px); font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace; box-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+  .__route_btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; color: #888; background: transparent; border: none; cursor: pointer; letter-spacing: 0.1em; transition: all .15s; text-transform: uppercase; text-decoration: none; }
+  .__route_btn:hover { color: #ddd; background: #151515; }
+  .__route_btn.active { color: #fff; background: #E10600; box-shadow: 0 0 10px rgba(225,6,0,.4); }
+</style>
+<nav class="__route_nav" aria-label="routes"><a class="__route_btn" href="/">DASH</a><a class="__route_btn" href="/theater">THEATER</a><a class="__route_btn active" href="/cockpit">COCKPIT</a><a class="__route_btn" href="/dispatch">DISPATCH</a></nav>
 
 <div class="topbar">
   <span class="l">▮ COCKPIT · SWARM OPS</span>
@@ -396,7 +403,7 @@ function renderTasks(sessionAgents) {
         const cs = a.callsign || '?';
         const cls = cs.startsWith('R·') ? 'reviewer' : modelClass(a.model);
         const conf = a.confidence != null ? ` · ${Math.round(a.confidence*100)}%` : '';
-        return `<span class="callsign sm ${cls}" data-tip="${esc(a.description)}${esc(conf)}">${esc(cs)}</span>`;
+        return `<span class="callsign sm ${cls}" data-tip="${esc(a.description)}${esc(conf)}" dir="ltr">${esc(cs)}</span>`;
       }).join('');
 
     return `
@@ -448,12 +455,16 @@ function renderRoster(sessionAgents) {
     const right = running && a.last_tool
       ? `<span class="rtool">→ ${esc(a.last_tool)}</span>`
       : `<span class="rstat">${a.confidence != null ? '✓ ' + Math.round(a.confidence*100)+'%' : '✓'} · ${a.tool_uses} tools · ${fmtDur(a.elapsed_seconds)}</span>`;
+    const anomaly = a.anomaly
+      ? `<span class="rsfty" style="color:#ca8a04" title="Anomaly: ${esc(a.anomaly)}">⚠</span>`
+      : '';
     return `
       <div class="roster-row ${running ? 'running' : 'done'}">
         <div class="rdot"></div>
         <span class="callsign sm ${csCls}">${esc(cs)}</span>
         <span class="rsfty ${sfty}">${sfty}</span>
-        <span class="rdesc">${esc(a.description)}</span>
+        ${anomaly}
+        <span dir="auto" class="rdesc">${esc(a.description)}</span>
         ${right}
       </div>
     `;
@@ -590,8 +601,8 @@ function renderStrip(sessionAgents) {
       ? `<div class="conf">${Math.round(a.confidence*100)}%</div>` : '';
     return `
       <div class="lamp ${running ? 'running' : 'done'}" data-tip="${esc(a.description)}">
-        <div class="lamp-top"><div class="dot"></div><span class="callsign sm ${csCls}">${esc(cs)}</span></div>
-        <div class="desc">${esc(a.description)}</div>
+        <div class="lamp-top"><div class="dot"></div><span class="callsign sm ${csCls}" dir="ltr">${esc(cs)}</span></div>
+        <div dir="auto" class="desc">${esc(a.description)}</div>
         <div class="stat-line">${a.tool_uses} tools · ${fmtDur(a.elapsed_seconds)}</div>
         ${conf}
       </div>
@@ -645,6 +656,94 @@ function render(agents) {
   renderStrip(sessionAgents);
   updateTape(sessionAgents);
 }
+
+// ============================================================================
+// FLOATING TOOLTIP — appended to <body> to escape panel overflow:hidden
+// ============================================================================
+(function () {
+  const tip = document.createElement('div');
+  tip.className = '__tip';
+  document.body.appendChild(tip);
+
+  let showTimer = null;
+  let currentEl = null;
+
+  function position(el) {
+    const forceTop = el.getAttribute('data-tip-pos') === 'top';
+    const rect = el.getBoundingClientRect();
+    // Reset constraints so measurements are accurate
+    tip.style.left = '0px';
+    tip.style.top  = '0px';
+    const tipRect = tip.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const margin = 8;
+
+    // Decide vertical placement: respect data-tip-pos="top", else default to bottom,
+    // but flip if there isn't room.
+    let placeTop = forceTop;
+    const spaceBelow = vh - rect.bottom;
+    const spaceAbove = rect.top;
+    if (!placeTop && spaceBelow < tipRect.height + 16 && spaceAbove > spaceBelow) {
+      placeTop = true;
+    } else if (placeTop && spaceAbove < tipRect.height + 16 && spaceBelow > spaceAbove) {
+      placeTop = false;
+    }
+
+    let top = placeTop
+      ? rect.top - tipRect.height - 10
+      : rect.bottom + 10;
+
+    // Horizontal: center on element, then clamp inside viewport
+    let left = rect.left + rect.width / 2 - tipRect.width / 2;
+    if (left < margin) left = margin;
+    if (left + tipRect.width > vw - margin) left = vw - margin - tipRect.width;
+
+    tip.style.left = left + 'px';
+    tip.style.top  = top + 'px';
+    tip.setAttribute('data-pos', placeTop ? 'top' : 'bottom');
+
+    // Position the arrow horizontally relative to the tooltip so it points at the element
+    const arrowX = rect.left + rect.width / 2 - left;
+    const clampedArrow = Math.max(10, Math.min(tipRect.width - 10, arrowX));
+    tip.style.setProperty('--arrow-x', clampedArrow + 'px');
+  }
+
+  function show(el) {
+    const text = el.getAttribute('data-tip');
+    if (!text) return;
+    currentEl = el;
+    tip.textContent = text;
+    // Force layout so getBoundingClientRect is accurate before positioning
+    tip.classList.remove('show');
+    position(el);
+    requestAnimationFrame(() => {
+      if (currentEl === el) tip.classList.add('show');
+    });
+  }
+
+  function hide() {
+    currentEl = null;
+    tip.classList.remove('show');
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-tip]');
+    if (!el || el === currentEl) return;
+    if (showTimer) clearTimeout(showTimer);
+    showTimer = setTimeout(() => show(el), 250);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) return;
+    // Only hide when leaving the trigger entirely
+    const to = e.relatedTarget;
+    if (to && el.contains(to)) return;
+    if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+    hide();
+  });
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+})();
 
 fetch('/api/agents?hours=24').then(r => r.json()).then(d => render(d.agents || []));
 

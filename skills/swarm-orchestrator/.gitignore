@@ -1,6 +1,20 @@
 # Local overrides (user-machine specific, not for repo)
 settings.local.json
 
+# Prototype dashboard — canonical copy lives at packages/swarm-dashboard/.
+# Kept on disk for local hacking but not part of the basic skill package.
+dashboard/
+
+# Local-only working notes — speculative backlog and per-run validation handoffs
+future-features/
+regression-suite/
+
+# Persona-rich / personal copies of docs — kept locally for the author's
+# own use (WOW-DEMO targeted at author's directory tree, persona-named
+# permission tiers, personal roadmap todos). The sanitized counterparts
+# in docs/ are what ships on GitHub.
+local/
+
 # Operations tier — transient swarm session artifacts
 memory/operations/*/
 !memory/operations/.gitkeep

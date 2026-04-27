@@ -1,8 +1,19 @@
 {
   "_meta": {
-    "version": "1.0.0",
-    "last_updated": "2026-04-24",
-    "description": "Default settings for swarm-orchestrator. Override via ~/.claude/swarm-orchestrator/settings.json (user-level) or <skill-dir>/settings.local.json (skill-local). Run /swarm-config to edit."
+    "version": "1.2.0",
+    "last_updated": "2026-04-25",
+    "description": "Default settings for swarm-orchestrator. Override via ~/.claude/swarm-orchestrator/settings.json (user-level) or <skill-dir>/settings.local.json (skill-local). Run /swarm-config to edit. v1.2.0: Mitigation #9 (artifact_verification) added."
+  },
+
+  "addons": {
+    "auto_discovery": true,
+    "search_paths": [
+      "<skill-dir>/addons",
+      "~/.claude/swarm-orchestrator/addons",
+      "<workspace>/.swarm/addons"
+    ],
+    "disabled": [],
+    "priority_overrides": {}
   },
 
   "output": {
@@ -26,7 +37,12 @@
       "tools_used_anomaly": true,
       "cross_link_contradictions": true
     },
-    "confidence_variance_threshold": 0.15
+    "confidence_variance_threshold": 0.15,
+    "artifact_verification": {
+      "mode": "block",
+      "expected_artifacts_field": "artifacts",
+      "min_size_bytes": 1
+    }
   },
 
   "models": {
