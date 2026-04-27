@@ -1,8 +1,8 @@
-# Protocol — The 8 Mitigations
+# Protocol — The 9 Mitigations
 
-The framework's failure mode is **confident-shallow output**: a muscle at the wrong tier returns a plausible-looking report that the orchestrator merges into a polished-looking synthesis which hides the thinness. Eight mitigations, layered by stakes, close that gap.
+The framework's failure mode is **confident-shallow output**: a muscle at the wrong tier returns a plausible-looking report that the orchestrator merges into a polished-looking synthesis which hides the thinness. Nine mitigations, layered by stakes, close that gap.
 
-The original 5 mitigations remain. Mitigations #6 (tool-use anomaly), #7 (cross-pollination), and #8 (synthesis quality gate) were added in the v2 upgrade after a real swarm run revealed gaps that the original 5 could not catch.
+The original 5 mitigations remain. Mitigations #6 (tool-use anomaly), #7 (cross-pollination), and #8 (synthesis quality gate) were added in the v2 upgrade after a real swarm run revealed gaps that the original 5 could not catch. Mitigation #9 (artifact verification) was added 2026-04-25 after Phase A testing revealed a fabricated-success failure mode that #5, #6, and #8 could not catch.
 
 ## Mitigation summary
 
@@ -16,6 +16,7 @@ The original 5 mitigations remain. Mitigations #6 (tool-use anomaly), #7 (cross-
 | 6 | Tool-use anomaly detection | ~0 | 0 (pure parsing) | no | **always** |
 | 7 | Cross-pollination pass | +$0.05–0.15 | +30–60s | no | swarms with N ≥ 4 |
 | 8 | Synthesis quality gate | ~0 | 0 (orchestrator self-check) | no | **always** (capstone) |
+| 9 | Artifact verification | ~0 | 0 (disk stat per declared artifact) | no | **always** when recipe declares artifacts |
 
 ## #4 — Model-match discipline (always on, the foundation)
 
@@ -122,7 +123,7 @@ Without this pass, each muscle's report stays in its own scope. The synthesis ca
 
 ## #8 — Synthesis quality gate (always on, capstone)
 
-Before publishing the final synthesis, the orchestrator runs a 7-item self-check that integrates all prior mitigations into one enforcement point. See `templates/synthesis-gate.md` for the full checklist:
+Before publishing the final synthesis, the orchestrator runs an 8-item self-check that integrates all prior mitigations into one enforcement point. See `templates/synthesis-gate.md` for the full checklist:
 
 1. All META blocks parsed and confidences extracted?
 2. All low-confidence claims labeled "unverified" in synthesis?
@@ -131,8 +132,9 @@ Before publishing the final synthesis, the orchestrator runs a 7-item self-check
 5. Spot-check artifact present (for `[M]`/`[H]`)?
 6. Reviewer triggered if conditions met?
 7. Cost report emitted per settings?
+8. Artifact verification: all declared artifacts exist on disk and are non-empty?
 
-Each check returns `pass | fail (remediated) | skipped`. Hard blocks (missing META, missing artifact) prevent publish until resolved. Soft remediations (label unverified, inject caveat) are silently fixed by the orchestrator.
+Each check returns `pass | fail (remediated) | skipped`. Hard blocks (missing META, missing artifact, failed artifact verification in `block` mode) prevent publish until resolved. Soft remediations (label unverified, inject caveat) are silently fixed by the orchestrator.
 
 **Why this is the capstone:** without it, an orchestrator can technically have implemented Mitigations 1–7 but still publish a synthesis that fails them. The gate is the integration test.
 
@@ -157,15 +159,66 @@ The reviewer produces:
 
 Reviewer output goes into its own dashboard card, visually linked to the swarm. The orchestrator incorporates reviewer findings into the final synthesis, prefixing any reviewer-flagged concerns with "Reviewer flagged:".
 
+## #9 — Artifact verification (always on when recipe declares artifacts)
+
+After each agent returns and before cross-pollination (Mitigation #7) and the synthesis gate (Mitigation #8), the orchestrator verifies that every artifact the agent declared actually exists on disk and is non-empty. This prevents fabricated-success output — where an agent's tool call silently fails (e.g., a Write denied due to permissions) but the agent emits a success-shaped stdout (`path\n398`) that the orchestrator relays as "DONE" without checking.
+
+**Discovery context (2026-04-25):** Phase A retest of the Antigravity adapter revealed this failure mode in practice. An Opus muscle dispatched to write `index.html` was permission-denied on the Write call, then printed `path\n398` as fabricated stdout. The slot relayed "DONE" without checking. Mitigation #5 (META block) did not catch it — the agent produced no real META block when faking. Mitigation #8 (synthesis gate) did not catch it — the gate operates on agent reports, not on disk reality. Mitigation #9 is the structural fix.
+
+### Configuration (`discipline.artifact_verification` in `defaults.json`)
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `mode` | `"off" \| "warn" \| "block"` | `"block"` | How verification failures are handled |
+| `expected_artifacts_field` | string | `"artifacts"` | META-block field where agents list files they wrote |
+| `min_size_bytes` | integer | `1` | Files smaller than this are treated as empty / failed |
+
+### Mode behavior
+
+**`"block"` mode (default):** verification failure means the agent's report is treated as failed. The orchestrator does NOT relay any "DONE:" claim from that agent's output. Re-dispatches once on a higher tier with a tightened prompt explicitly naming the permission barrier. If the re-dispatch also fails verification, surfaces the verification failure to the user verbatim with `VERIFICATION FAILED:` prefix. No fabricated results merge into synthesis.
+
+**`"warn"` mode:** verification failure is logged and flagged in the synthesis caveat block. The report is still relayed, but prefixed with `VERIFICATION FAILED:` so downstream readers know. Synthesis gate check #8 records this as a soft failure, remediated by the caveat.
+
+**`"off"` mode:** no disk checks performed. Use only in environments where agents write to remote storage that the orchestrator cannot stat directly.
+
+### When it fires
+
+After each agent returns (between Step 2 "Per-muscle return processing" and Step 3 "Spot-check" in SKILL.md), for any agent whose dispatch recipe or META block declares an `artifacts` field. If the field is absent or empty, the check is skipped for that agent.
+
+```python
+# Step 2.5 — Artifact verification (mitigation #9)
+if settings.discipline.artifact_verification.mode != 'off':
+    for path in agent.meta.get('artifacts', []):
+        if not os.path.exists(path) or os.path.getsize(path) < settings.discipline.artifact_verification.min_size_bytes:
+            if settings.discipline.artifact_verification.mode == 'block':
+                flag_agent_as_failed(agent, reason=f"VERIFICATION FAILED: {path} does not exist or is empty")
+                redispatch_on_higher_tier(agent, tightened_prompt=True)
+            elif settings.discipline.artifact_verification.mode == 'warn':
+                flag_for_synthesis_caveat(agent, f"VERIFICATION FAILED: {path}")
+```
+
+### Synthesis gate impact
+
+Synthesis gate check #8 is the integration enforcement point for this mitigation:
+
+- In `"block"` mode: any failed verification is a **hard block** — synthesis cannot publish until the re-dispatch resolves or the failure is surfaced to the user.
+- In `"warn"` mode: failed verifications are a **soft remediation** — the caveat block is injected before synthesis publishes.
+
+**Cross-references:** configuration lives in `defaults.json` under `discipline.artifact_verification`. The gate check is in `templates/synthesis-gate.md` (check #8).
+
+### Cost
+
+~0 per artifact. A filesystem `stat` or `os.path.getsize` call. Re-dispatch when fired adds the cost of one extra muscle dispatch (~$0.05–0.30 depending on tier).
+
 ## Safety tag → mitigation layering
 
-| Safety tag | #4 Match | #5 Typed | #2 Esc. | #3 Spot-check | #6 Anomaly | #7 Cross-link | #1 Reviewer | #8 Gate |
-|---|---|---|---|---|---|---|---|---|
-| `[L]` low-stakes | ✅ | ✅ | ⬜ | ⬜ | ✅ | ✅ (if N≥4) | ⬜ | ✅ |
-| `[M]` medium-stakes | ✅ | ✅ | ✅ | ✅ (mandatory artifact) | ✅ | ✅ (if N≥4) | ⬜ static; ✅ on dynamic trigger | ✅ |
-| `[H]` high-stakes | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (if N≥4) | ✅ | ✅ |
+| Safety tag | #4 Match | #5 Typed | #2 Esc. | #3 Spot-check | #6 Anomaly | #7 Cross-link | #1 Reviewer | #8 Gate | #9 Artifact |
+|---|---|---|---|---|---|---|---|---|---|
+| `[L]` low-stakes | ✅ | ✅ | ⬜ | ⬜ | ✅ | ✅ (if N≥4) | ⬜ | ✅ | ✅ (if artifacts declared) |
+| `[M]` medium-stakes | ✅ | ✅ | ✅ | ✅ (mandatory artifact) | ✅ | ✅ (if N≥4) | ⬜ static; ✅ on dynamic trigger | ✅ | ✅ (if artifacts declared) |
+| `[H]` high-stakes | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (if N≥4) | ✅ | ✅ | ✅ (if artifacts declared) |
 
-The tag goes in the description prefix: `[M] Audit MachineGuides diagnoses/`.
+The tag goes in the description prefix: `[M] Audit docs/diagnoses/`.
 
 The dashboard parses the prefix and renders a colored safety pill.
 
@@ -204,6 +257,7 @@ Trivial premium for catching confident-wrong output. Always worth it when the sw
 **Per-muscle parsing:**
 - [ ] Parse confidence — escalate any `< reescalation_threshold` (default 0.7)
 - [ ] Parse `tools_used` — check against recipe floor (mitigation #6); fire anomaly action per settings
+- [ ] Parse `artifacts` — stat each declared file; apply `artifact_verification.mode` action (mitigation #9)
 - [ ] Write per-agent JSON to `memory/operations/<session>/agents/<name>.json`
 
 **Post-swarm (orchestrator):**

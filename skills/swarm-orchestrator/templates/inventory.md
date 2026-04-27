@@ -42,8 +42,8 @@ sample_size: N or "exhaustive"
 
 ## Fields to fill
 
-- `{{FOLDER_NAME}}` — short friendly name (e.g., "MachineGuides")
-- `{{FULL_PATH}}` — absolute path (e.g., `C:\Users\ronsh\Desktop\MachineGuides`)
+- `{{FOLDER_NAME}}` — short friendly name (e.g., "YourProject")
+- `{{FULL_PATH}}` — absolute path (e.g., `C:\Users\<you>\Desktop\YourProject` on Windows or `~/Desktop/YourProject` on macOS/Linux)
 - `{{ADDITIONAL_EXCLUDES}}` — optional extra folder names to skip (one per line, e.g., `\n- .next\n- _archive`)
 - `{{SECTION_TITLE}}` — report section heading (usually same as folder name)
 
@@ -64,9 +64,9 @@ To inventory multiple folders at once, fill this template N times with different
 ## Example filled-in prompt
 
 ```
-[L] Inventory ComfyUI
+[L] Inventory <YourProject>
 
-Audit ONLY `C:\Users\ronsh\Desktop\ComfyUI`. Read-only. Do NOT modify.
+Audit ONLY `<absolute path to your folder>`. Read-only. Do NOT modify.
 
 Exclude: `.git`, `node_modules`, `__pycache__`, `.venv`, `venv`, `env`
 

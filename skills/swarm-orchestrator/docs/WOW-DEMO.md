@@ -1,35 +1,35 @@
-# Wow Demo — The Week Start Triage
+# Wow Demo — Showcase Swarm
 
-A curated showcase swarm that exercises the full framework in under 5 minutes. Run this when you want to demo the stack to someone, smoke-test after changes, or legitimately need a prioritized week-start action list.
+A curated showcase swarm that exercises the full framework in under 5 minutes. Run this when you want to demo the stack to someone, smoke-test after changes, or get a real prioritized action list out of an existing workspace.
 
 ## What it does
 
-Fires 5 muscle agents in parallel (mixed Haiku + Sonnet, safety tags `[L]` and `[M]`), then runs a Sonnet `[H]` reviewer sequentially on top. Produces a prioritized Top-5-actions-this-week list with adversarial critique of the muscle findings.
+Fires 5 muscle agents in parallel (mixed Haiku + Sonnet, safety tags `[L]` and `[M]`), then runs a Sonnet `[H]` reviewer sequentially on top. Produces a synthesized report with adversarial critique of the muscle findings.
 
 ## The swarm shape
 
-| # | Model | Safety | Scope |
+| # | Model | Safety | Generic task |
 |---|---|---|---|
-| 1 | Haiku | `[L]` | Top-level loose files in `Ron's Brain/` |
-| 2 | Haiku | `[L]` | Files added to `Downloads/` in the last 14 days |
-| 3 | Sonnet | `[M]` | `MachineGuides/diagnoses/` + `guides/` pipeline status |
-| 4 | Haiku | `[M]` | TODO/checkbox sweep across active projects |
-| 5 | Sonnet | `[M]` | Git momentum across all active repos (last 7 days) |
-| R | Sonnet | `[H]` | Adversarial reviewer — synthesis + Top 5 priorities |
+| 1 | Haiku | `[L]` | Inventory loose files at the top of a project tree |
+| 2 | Haiku | `[L]` | Count file types in a documentation directory |
+| 3 | Sonnet | `[M]` | Audit pipeline status in a content-generation directory |
+| 4 | Sonnet | `[M]` | Cross-check naming consistency across N similar artifacts |
+| 5 | Sonnet | `[H]` | Synthesize freshness/scope/risk findings into one report |
+| R | Opus  | adversarial | Re-read all child outputs + sample raw files |
 
 Total: ~$0.80, ~4–5 min wall time, 6 agents visible on dashboard.
 
 ## Why these five
 
-Each muscle covers one **dimension of weekly state**:
+Each muscle covers one **dimension of workspace state**:
 
-1. **What's actively being worked on** — recent loose files show what's in flight
-2. **What's accumulating** — Downloads reveals what's being pulled in without triage
-3. **What's in the pipeline** — diagnoses status shows incomplete/drift in the product
-4. **What's open** — TODOs + checkboxes show commitments not yet closed
-5. **What's shipping** — git momentum shows actual delivery vs planning
+1. **What's loose** — top-level files reveal what's in flight or un-filed
+2. **What's accumulating** — file-type counts in docs reveal drift in shape
+3. **What's in the pipeline** — content-pipeline status shows incomplete or stale work
+4. **What's inconsistent** — naming sweep across similar artifacts catches integrity issues
+5. **What's the net read** — synthesis muscle compresses the other four into one risk picture
 
-The reviewer synthesizes across dimensions to find the cross-cutting pattern no single muscle sees. This is the OpenClaw / Hermes hierarchical pattern in miniature.
+The reviewer synthesizes across dimensions to find the cross-cutting pattern no single muscle sees. This is the hierarchical decomposition pattern in miniature.
 
 ## What makes it "wow"
 
@@ -37,13 +37,13 @@ The reviewer synthesizes across dimensions to find the cross-cutting pattern no 
 - **Live tool traces** — you watch each muscle scan its scope in real time
 - **Safety tags + confidence pills** — protocol metadata visible on every card
 - **Sequential reviewer** — after the parallel swarm, the `[H]` reviewer card appears and runs adversarial synthesis
-- **Genuinely useful output** — not a contrived demo; produces a real prioritized action list
+- **Genuinely useful output** — not a contrived demo; produces a real prioritized action list against your own workspace
 
 ## How to fire it
 
 ### Option A — Tell Claude in chat
 
-> "fire the wow demo" — or — "run the week start triage"
+> "fire the wow demo" — or — "run the showcase swarm"
 
 Claude picks up the trigger, dispatches the 5 muscles in one message (parallel), waits for all to complete, spot-checks one claim, then fires the reviewer. Synthesis delivered inline.
 
@@ -55,48 +55,69 @@ Click **Launch Wow Demo** from the dashboard's recipe menu (when added). Dashboa
 
 `dashboard/wow-demo.bat` opens the dashboard in your browser and prints the trigger phrase, then opens your Claude Code CLI so you can paste it and go. Useful for pitch demos where you want the dashboard pre-loaded.
 
-## Customizing the recipe
+## How to adapt this to your own setup
 
-To adapt for other people's workloads, edit this doc and change:
+The swarm is templated — point each agent at your own paths and it works:
 
-- **Folder paths** in muscles 1, 2, 3, 4 to point at whoever's working directory
-- **Active projects list** in muscle 5 to their repos
-- **Reviewer context** — the persona sentence describing who the user is ("Ron is a welder/fabricator + co-CEO of a milling company") should be rewritten for the new user
+- **Muscle 1 (loose-file inventory):** point at `<your project>` root. Looks for files that appear un-filed (top-level scratch, screenshots, half-named docs). Returns a categorized list.
+- **Muscle 2 (doc-folder type counts):** point at `<your docs folder>`. Returns extension/category counts and flags any sudden new file types as drift signals.
+- **Muscle 3 (content-pipeline audit):** point at `<your content pipeline>` (e.g. a `guides/`, `posts/`, `reports/` directory). Returns per-stage counts: drafted, reviewed, published, stale.
+- **Muscle 4 (naming-consistency cross-check):** point at a directory of N similar artifacts (specs, configs, templates). Returns mismatched-naming pairs and any artifacts whose content looks duplicated despite being named differently.
+- **Muscle 5 (synthesis):** consumes the META blocks of muscles 1–4 and outputs a freshness/scope/risk read. No new tool calls — pure reasoning over the children.
 
-The muscle prompts themselves are generic enough to transfer — the customization is purely paths + persona.
+The muscle prompts themselves are generic — only the paths and the reviewer's context sentence (what kind of operator you are, what you care about) need to change.
 
 ## When NOT to use this recipe
 
 - You don't want an adversarial review. Some weeks you just want facts, not a critique. Skip the reviewer, run the 5 muscles only.
 - You want deeper analysis on one dimension. Better to run a focused Sonnet deep-dive than a shallow multi-dimension swarm.
-- You haven't done any work recently. The recipe will find little and look anticlimactic.
+- The workspace is too quiet. The recipe will find little and look anticlimactic if no real work has happened recently.
 
 ## Expected output shape
 
+Each muscle emits a META block that the orchestrator parses:
+
 ```
-# Week Start Triage — Reviewer Synthesis
+---META---
+agent_id: muscle-3
+model: sonnet
+safety: M
+confidence: 0.82
+findings:
+  - id: f1
+    summary: "<short claim>"
+    evidence: "<paths or counts>"
+not_checked:
+  - "<scope explicitly skipped>"
+---END META---
+```
+
+The reviewer then produces:
+
+```
+# Showcase Swarm — Reviewer Synthesis
 
 ## Claims I doubt
-[adversarial notes on muscle findings]
+[adversarial notes on muscle findings, with evidence sampled directly]
 
 ## What the swarm missed
 [cross-section patterns only visible from combining reports]
 
-## Top 5 actions for this week (prioritized)
+## Top actions (prioritized)
 1. [most urgent] — why, time estimate
 2. ...
 
 ## Net state assessment
-[one-paragraph honest read on Ron's working-environment state]
+[one-paragraph honest read on workspace state]
 ```
 
-The Top 5 is the deliverable. Everything else is evidence.
+The prioritized action list is the deliverable. Everything else is evidence.
 
 ## Running cost over time
 
-Expected weekly cost if run every Monday morning:
+Expected cost per run if used as a regular weekly triage:
 
-- $0.80 per run × 52 weeks = **~$42/year** for a disciplined weekly triage
+- $0.80 per run × 52 weeks = **~$42/year** for a disciplined weekly pass
 - Compare: the same quality review from a human consultant starts at $200/hr
 
 The cost only goes up if you:
@@ -120,18 +141,6 @@ The reviewer follows `templates/reviewer.md` with all 5 muscle reports inlined a
 
 1. Parse all 5 META blocks
 2. Escalate any muscle with `confidence < 0.7` (silent re-dispatch to Sonnet)
-3. Spot-check 1 critical claim with a direct tool call (typically the security-tagged one, if any)
+3. Spot-check 1 critical claim with a direct tool call (typically the highest-safety-tag finding)
 4. Dispatch reviewer with muscle outputs inlined
 5. Present reviewer's synthesis to user — do NOT re-synthesize on top, it's already the deliverable
-
-## History — the first wow demo run
-
-The first run of this recipe (2026-04-23) found:
-
-- Google OAuth credential exposed in Downloads (confirmed via orchestrator spot-check)
-- Bobcat + Gehl SPN172 hypothesis trackers sharing identical content despite being physically different fleet machines (diagnostic integrity issue, not just data hygiene)
-- MachineGuides + Ron's Brain both un-versioned (business risk for 18 JSON specs + hypothesis trackers)
-- `rasar_*` files appearing suddenly in Ron's Brain with no scope declared — resource conflict with MachineGuides backfill work
-- 122 open checkboxes across 5 active planning docs, low close-rate
-
-Total cost of that run: ~$0.80. The OAuth finding alone paid for the next 50 runs.

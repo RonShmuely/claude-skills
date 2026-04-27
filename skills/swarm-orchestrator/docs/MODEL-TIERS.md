@@ -80,7 +80,7 @@ Based on measured workloads from the reference project:
 | Disk cleanup with judgment calls | Opus | ~$0.80 | ~6 min |
 | Same 5-section audit on single Opus 1M Extra High | Opus (all of it) | ~$50–100 | ~15 min |
 
-## Heterogeneous teams (the OpenClaw move)
+## Heterogeneous teams
 
 For big tasks, you can mix tiers in sequence on the same subject:
 

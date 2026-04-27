@@ -1,0 +1,18 @@
+# swarm-orchestrator — Python runtime dependencies
+#
+# Install with:
+#   pip install -r requirements.txt
+#
+# Or selectively if you don't need the optional knowledge-tier vector search:
+#   pip install pyyaml          # required for addons.py manifest parsing
+#
+# Tested on Python 3.10+.
+
+# Required — addon manifest parsing (lib/addons.py).
+pyyaml>=6.0
+
+# Optional — knowledge-tier vector search.
+# Only needed if you flip memory.knowledge.enable_vectors=true in settings.
+# The skill works fine without these (FTS5-only retrieval, default mode).
+# sentence-transformers>=2.2.0
+# sqlite-vec>=0.1.0  # also requires the sqlite3 C extension to be loadable

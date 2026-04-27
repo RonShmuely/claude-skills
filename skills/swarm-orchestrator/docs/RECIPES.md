@@ -216,4 +216,4 @@ When a recipe gets fired 3+ times, it's worth turning into a UI affordance:
 3. Click → Flask spawns the swarm by the recipe's spec
 4. Dashboard shows the swarm grouped as a recipe-run
 
-At that point the orchestrator isn't strictly needed in-session anymore — the dashboard becomes its own Gateway. That's the graduation path to the OpenClaw-style architecture (`docs/ARCHITECTURE.md` explains the tradeoff).
+At that point the orchestrator isn't strictly needed in-session anymore — the dashboard becomes its own Gateway. That's the graduation path to a Gateway-based architecture (`docs/ARCHITECTURE.md` explains the tradeoff).

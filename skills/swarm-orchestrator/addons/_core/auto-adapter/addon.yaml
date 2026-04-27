@@ -1,0 +1,41 @@
+name: auto-adapter
+version: 1.0.0
+description: >
+  Learn a target repo and generate a swarm-orchestrator addon that captures
+  its workflow, conventions, and domain skills. Activated by triggers like
+  "adapt to X", "learn this repo", "build addon for X", or Hebrew equivalents.
+author: Ron Shmuely (claude-skills/swarm-orchestrator)
+swarm_orchestrator_min: ">=2.0.0"
+status: enabled
+priority: 80
+tags: [meta, bootstrap, learning, repo-onboarding]
+
+requires: []
+
+provides:
+  recipes:
+    - recipes/learn-repo.yaml
+  templates:
+    - templates/repo-inventory.md
+    - templates/workflow-extraction.md
+    - templates/domain-skills-synthesis.md
+    - templates/addon-synthesis.md
+    - templates/addon-doctor.md
+
+# Triggers the orchestrator listens for to invoke this addon's recipe.
+# These are matched by the addon loader and surfaced in SKILL.md.
+triggers:
+  english:
+    - "adapt to (?P<repo>.+)"
+    - "learn (this repo|the repo|repo at) (?P<repo>.+)"
+    - "build( me)? an addon for (?P<repo>.+)"
+    - "onboard (?P<repo>.+) into the swarm"
+    - "/swarm-addons learn (?P<repo>.+)"
+  hebrew:
+    - "תלמדי את (?P<repo>.+)"
+    - "תתאימי ל[-]?(?P<repo>.+)"
+    - "תבני אדאון ל[-]?(?P<repo>.+)"
+    - "תאמצי את (?P<repo>.+)"
+
+# Hooks (none required for this addon yet).
+# This addon writes its output via the recipe's synthesis agent — no hooks needed.

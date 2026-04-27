@@ -1,10 +1,20 @@
 # swarm-orchestrator
 
-> Multi-agent swarm skill for Claude Code. One brain, N muscles, configurable, with three-tier memory and a quality gate. Live dashboard included.
+> Multi-agent swarm skill for Claude Code. One brain, N muscles, configurable, with three-tier memory and a quality gate.
+
+## Scope (read first)
+
+This skill is the **cross-runtime swarm-orchestrator framework**. It is the product. It runs on top of any Claude-family runtime that can dispatch subagents — natively in Claude Code via the Agent tool, or via shell-out to `claude -p` from runtimes that lack native dispatch (Antigravity, Cursor). The framework is the single source of truth; per-runtime adapters (e.g., the workspace `AGENTS.md` template) are thin wrappers that translate framework concepts into one IDE's primitives.
+
+The `swarm-dashboard` package (separate, at `packages/swarm-dashboard/`) is an **optional standalone observability tool** — a passive viewer of `~/.claude/projects/` and `~/.swarm/` that renders live + historical swarm runs. The dashboard is single-user and local-only. **The framework does not depend on the dashboard.** Dispatches happen via the runtime's native primitives (or `claude -p` shell-out); the dashboard, if running, watches and renders. If it's down, dispatches still work.
+
+Audiences for the framework: **Easy tier** (non-technical user, Hebrew-first), **Advanced tier** (power user with multiple model subscriptions), **Developer tier** (unrestricted access for skill authoring + audits), and future SaaS tier users (open-core with closed federated learner). The dashboard is currently single-user / single-author scope.
+
+
 
 ## What this is
 
-A Claude Code skill that turns any sufficiently-parallelizable task into a swarm: an Opus orchestrator decomposes, dispatches specialist muscles (Haiku for narrow work, Sonnet for reasoning, Opus for stakes), then synthesizes. Mirrors the **OpenClaw sub-agent mode** and **Hermes Agent hierarchical decomposition** patterns — but stays in-session, no separate Gateway process.
+A Claude Code skill that turns any sufficiently-parallelizable task into a swarm: an Opus orchestrator decomposes, dispatches specialist muscles (Haiku for narrow work, Sonnet for reasoning, Opus for stakes), then synthesizes. Stays in-session — no separate Gateway process.
 
 **Current version: v2.0** (2026-04-25). See [`CHANGELOG.md`](CHANGELOG.md) and [`RELEASE-v2.md`](RELEASE-v2.md) for the full upgrade notes.
 
@@ -14,7 +24,7 @@ Running a single Opus on large parallelizable tasks is **30–50× more expensiv
 
 This skill codifies the discipline to do it right.
 
-## The 8 Mitigations (v2)
+## The 9 Mitigations (v2)
 
 1. **Reviewer loop** — adversarial agent re-reads children + samples raw files. Static trigger on `[H]` tag plus 4 dynamic triggers.
 2. **Escalation protocol** — `confidence < reescalation_threshold` (default 0.7) silently re-dispatches on a higher tier.
@@ -23,7 +33,8 @@ This skill codifies the discipline to do it right.
 5. **Typed outputs + confidence** — every muscle emits a META block with `confidence`, `method`, `not_checked`, `sample_size`, `tools_used`.
 6. **Tool-use anomaly detection** *(new in v2)* — `tools_used` checked against recipe floors. `block` mode auto re-dispatches violators.
 7. **Cross-pollination pass** *(new in v2)* — for swarms with N≥4, finds contradictions between agent reports before synthesis.
-8. **Synthesis quality gate** *(new in v2)* — 7-item pre-publish self-check; hard blocks on missing artifacts, soft remediations for the rest.
+8. **Synthesis quality gate** *(new in v2)* — 8-item pre-publish self-check; hard blocks on missing artifacts, soft remediations for the rest.
+9. **Artifact verification** *(new in v2.1)* — after each agent returns, stats every declared artifact on disk before relaying any "DONE" claim; `block` mode prevents fabricated-success output from reaching synthesis.
 
 ## Three-tier memory (v2)
 
@@ -63,7 +74,7 @@ swarm-orchestrator/
 ├── docs/
 │   ├── ARCHITECTURE.md     # brain + muscles model
 │   ├── MODEL-TIERS.md      # Haiku/Sonnet/Opus/Ollama decision table
-│   ├── PROTOCOL.md         # the 8 mitigations in detail
+│   ├── PROTOCOL.md         # the 9 mitigations in detail
 │   ├── COST-BENCHMARK.md   # framework vs single-Opus 1M
 │   ├── RECIPES.md          # 9 reusable swarm patterns + tool-use floors
 │   ├── SETTINGS.md         # every knob, every default, override mechanism (v2)
@@ -79,7 +90,7 @@ swarm-orchestrator/
 │   ├── meta-block.md       # required META footer (incl. tools_used)
 │   ├── spot-check.md       # mandatory artifact for [M]/[H] (v2)
 │   ├── cost-report.md      # end-of-run cost + latency timeline (v2)
-│   └── synthesis-gate.md   # 7-item pre-publish checklist (v2)
+│   └── synthesis-gate.md   # 8-item pre-publish checklist (v2)
 ├── memory/                 # v2
 │   ├── identity/           # stable facts (gitkept; user adds *.md)
 │   ├── operations/         # per-run artifacts (gitignored)
@@ -92,7 +103,7 @@ swarm-orchestrator/
 
 ## Using it
 
-The skill auto-activates when Claude sees triggers: *"swarm"*, *"parallel agents"*, *"dispatch N haikus"*, *"fan out"*, *"multi-agent"*, *"brain and muscles"*, *"orchestrate"*, anything resembling OpenClaw / Hermes patterns. It also fires on cost-efficient-bulk asks.
+The skill auto-activates when Claude sees triggers: *"swarm"*, *"parallel agents"*, *"dispatch N haikus"*, *"fan out"*, *"multi-agent"*, *"brain and muscles"*, *"orchestrate"*, anything resembling a swarm / fan-out / parallel-agent pattern. It also fires on cost-efficient-bulk asks.
 
 Or invoke explicitly: "use the swarm-orchestrator skill to audit this folder."
 
