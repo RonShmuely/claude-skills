@@ -1,6 +1,16 @@
-# Swarm Monitor — Live Dashboard (optional)
+# Swarm Monitor — Live Dashboard (optional, observer-only)
 
-A local Flask + Tailwind dashboard that watches Claude Code's subagent transcripts and streams live state to the browser. Purely observational — the swarm pattern works without it.
+A local Flask + Tailwind dashboard that watches Claude Code's subagent transcripts and parent-session logs, then streams live state to the browser. Purely observational — the swarm pattern works without it.
+
+## Scope (read first)
+
+This is a **standalone observability tool**, not part of the swarm-orchestrator framework's dispatch path. It reads from `~/.claude/projects/` (Claude Code's native logs) and `~/.swarm/` (per-dispatch sidecars written by runtime adapters). It writes only to its own SQLite history at `~/.claude/swarm/history.db` and its in-memory job registry. It never spawns agents in the production architecture — direct `claude -p` from the runtime adapter (e.g., Antigravity AGENTS.md, Claude Code skill, Cursor rules) is the canonical dispatch path.
+
+**Currently single-user and local-only.** The `/api/dispatch`, `/api/jobs`, and `/api/jobs/<id>/stream` endpoints (sections marked DEPRECATED in `app.py`) were a Phase A convenience to spawn `claude -p` from inside the dashboard process — useful for ad-hoc UI dispatches, but the wrong layer for production. They will be removed in v2.2; new code should not depend on them.
+
+The framework dispatches; the dashboard observes. If it's down, dispatches still work.
+
+
 
 ## What you see
 
