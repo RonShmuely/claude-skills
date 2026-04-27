@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>{{TITLE_TEXT}}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  /* ============================================================
+     Design tokens — print-safe, no dark mode, no AI gradients.
+     ============================================================ */
+  :root {
+    --ink: #000;
+    --ink-soft: #444;
+    --ink-faint: #888;
+    --paper: #fff;
+    --rule: #888;
+    --rule-thin: #bbb;
+    --accent-warn: #b00000;
+    --grid: #e8e8e8;
+    --pad: 4mm;
+    --gap: 3mm;
+
+    /* Typography — single neutral system font, no premium pairings.
+       Hebrew renders via OS default; we just keep weights & sizes consistent. */
+    --font-body: "Arial", "Helvetica", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "Consolas", "Courier New", monospace;
+  }
+
+  @page { size: A3 landscape; margin: 10mm; }
+  @page :first { size: A3 landscape; margin: 10mm; }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--paper); color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 10pt;
+    line-height: 1.35;
+  }
+
+  /* ============================================================
+     Sheet — A3 landscape (420 × 297 mm), 6mm inner border, grid layout.
+     On screen, sized to A3; in print, fills @page minus margins.
+     ============================================================ */
+  .sheet {
+    width: 400mm;        /* A3 landscape minus 10mm @page margins on each side */
+    height: 277mm;
+    margin: 10mm auto;
+    padding: 4mm;
+    border: 0.4mm solid var(--ink);
+    background: var(--paper);
+    display: grid;
+    grid-template-columns: 1fr 95mm;     /* drawing area | right rail */
+    grid-template-rows: auto 1fr 70mm;   /* title strip | drawing/notes | tables */
+    grid-template-areas:
+      "title   title"
+      "drawing notes"
+      "tables  revs";
+    gap: var(--gap);
+  }
+
+  @media screen {
+    body { background: #cfcfcf; padding: 8mm 0; }
+    .sheet { box-shadow: 0 1mm 3mm rgba(0,0,0,0.25); }
+  }
+  @media print {
+    body { background: var(--paper); padding: 0; }
+    .sheet { margin: 0; box-shadow: none; width: 100%; height: 100%; }
+  }
+
+  /* ============================================================
+     Title strip (top, full width). Contains the title block on the
+     right (RTL primary) and a slim identifier rail on the left.
+     ============================================================ */
+  .title-strip {
+    grid-area: title;
+    display: grid;
+    grid-template-columns: 1fr 200mm;
+    border-bottom: 0.3mm solid var(--ink);
+    align-items: stretch;
+    min-height: 28mm;
+  }
+
+  .title-left {
+    padding: var(--pad);
+    border-left: 0.2mm solid var(--rule-thin);
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .title-left .job-id {
+    font-family: var(--font-mono);
+    font-size: 14pt; font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .title-left .meta-line {
+    font-size: 9pt; color: var(--ink-soft);
+    display: flex; flex-wrap: wrap; gap: 3mm;
+  }
+  .title-left .meta-line strong { color: var(--ink); font-weight: 600; }
+
+  .title-block {
+    padding: var(--pad);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: auto;
+    gap: 1mm 3mm;
+    align-content: center;
+  }
+  .title-block .title-main {
+    grid-column: 1 / -1;
+    font-size: 18pt; font-weight: 700;
+    line-height: 1.15;
+    margin-bottom: 1mm;
+  }
+  .title-block .title-sub {
+    grid-column: 1 / -1;
+    font-size: 9pt; color: var(--ink-soft);
+    margin-bottom: 2mm;
+  }
+  .title-block .field {
+    display: flex; flex-direction: column;
+    border-top: 0.15mm solid var(--rule-thin);
+    padding-top: 1mm;
+    min-height: 9mm;
+  }
+  .title-block .field .label {
+    font-size: 7pt; color: var(--ink-faint);
+    letter-spacing: 0.3px; text-transform: uppercase;
+  }
+  .title-block .field .value {
+    font-size: 10pt; font-weight: 600;
+    margin-top: 0.5mm;
+  }
+  .title-block .field.warn .value { color: var(--accent-warn); }
+
+  /* ============================================================
+     Drawing area — centered single view (Phase 1 = one image).
+     Phase 2 will overlay procedural SVG weld symbols.
+     ============================================================ */
+  .drawing {
+    grid-area: drawing;
+    border: 0.2mm solid var(--rule-thin);
+    background:
+      linear-gradient(var(--grid) 0.05mm, transparent 0.05mm) 0 0/10mm 10mm,
+      linear-gradient(90deg, var(--grid) 0.05mm, transparent 0.05mm) 0 0/10mm 10mm,
+      var(--paper);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 4mm;
+    overflow: hidden;
+    position: relative;
+  }
+  .drawing .view-label {
+    position: absolute; top: 2mm; right: 3mm;
+    font-size: 9pt; font-weight: 600;
+    background: var(--paper); padding: 0 2mm;
+  }
+  .drawing .view-scale {
+    position: absolute; bottom: 2mm; left: 3mm;
+    font-size: 8pt; color: var(--ink-soft);
+    background: var(--paper); padding: 0 2mm;
+  }
+  .drawing img, .drawing svg {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+  }
+  .drawing .empty {
+    color: var(--ink-faint); font-size: 9pt; font-style: italic;
+  }
+
+  /* ============================================================
+     Notes block (right rail).
+     ============================================================ */
+  .notes {
+    grid-area: notes;
+    border: 0.2mm solid var(--rule-thin);
+    padding: var(--pad);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .notes h3 {
+    margin: 0 0 2mm; font-size: 10pt; font-weight: 700;
+    border-bottom: 0.2mm solid var(--ink); padding-bottom: 1mm;
+  }
+  .notes ol {
+    margin: 0; padding: 0 5mm 0 0;
+    font-size: 9pt; line-height: 1.45;
+  }
+  .notes ol li { margin-bottom: 1.5mm; }
+  .notes .empty { color: var(--ink-faint); font-style: italic; font-size: 9pt; }
+
+  /* ============================================================
+     Tables strip (bottom-left): BOM + weld table side-by-side.
+     ============================================================ */
+  .tables {
+    grid-area: tables;
+    display: grid;
+    grid-template-columns: 1.1fr 1.4fr;
+    gap: var(--gap);
+  }
+  .tbl-wrap {
+    border: 0.2mm solid var(--rule-thin);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .tbl-wrap h3 {
+    margin: 0; padding: 1.5mm var(--pad);
+    font-size: 10pt; font-weight: 700;
+    background: #f3f3f3;
+    border-bottom: 0.2mm solid var(--ink);
+  }
+  table.bom, table.welds {
+    width: 100%; border-collapse: collapse;
+    font-size: 8.5pt;
+  }
+  table.bom th, table.bom td,
+  table.welds th, table.welds td {
+    padding: 1.2mm 2mm;
+    border-bottom: 0.1mm solid var(--rule-thin);
+    text-align: right;
+    vertical-align: top;
+  }
+  table.bom th, table.welds th {
+    font-size: 7.5pt; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: 0.3px;
+    font-weight: 600;
+    background: #fafafa;
+  }
+  table.bom td.num, table.welds td.num {
+    font-family: var(--font-mono);
+    text-align: center; width: 9mm;
+  }
+  table.welds .field-flag {
+    color: var(--accent-warn); font-weight: 700; font-size: 9pt;
+  }
+
+  /* ============================================================
+     Revisions block (bottom-right).
+     ============================================================ */
+  .revs {
+    grid-area: revs;
+    border: 0.2mm solid var(--rule-thin);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .revs h3 {
+    margin: 0; padding: 1.5mm var(--pad);
+    font-size: 10pt; font-weight: 700;
+    background: #f3f3f3;
+    border-bottom: 0.2mm solid var(--ink);
+  }
+  .revs table {
+    width: 100%; border-collapse: collapse; font-size: 8.5pt;
+  }
+  .revs th, .revs td {
+    padding: 1mm 2mm; text-align: right;
+    border-bottom: 0.1mm solid var(--rule-thin);
+  }
+  .revs th {
+    font-size: 7.5pt; color: var(--ink-faint);
+    text-transform: uppercase; font-weight: 600;
+    background: #fafafa;
+  }
+  .revs td.rev-id {
+    font-family: var(--font-mono);
+    text-align: center; width: 12mm; font-weight: 700;
+  }
+  .revs .empty { padding: 3mm var(--pad); color: var(--ink-faint); font-style: italic; }
+
+  /* small utilities */
+  .pn   { font-family: var(--font-mono); font-weight: 600; }
+  .code { font-family: var(--font-mono); }
+  bdi   { unicode-bidi: isolate; }
+</style>
+</head>
+<body>
+  <main class="sheet" lang="he" dir="rtl">
+
+    <!-- ===== TITLE STRIP ===== -->
+    <header class="title-strip">
+      <div class="title-left">
+        <div class="job-id"><bdi>{{JOB_ID}}</bdi></div>
+        <div class="meta-line">
+          <span><strong>גיליון:</strong> <bdi>{{SHEET_N}} / {{SHEET_OF}}</bdi></span>
+          <span><strong>גרסה:</strong> <bdi>{{REVISION}}</bdi></span>
+          <span><strong>תאריך:</strong> <bdi>{{DATE_DISPLAY}}</bdi></span>
+        </div>
+      </div>
+      <div class="title-block">
+        <div class="title-main">{{TITLE_HE}}</div>
+        <div class="title-sub">{{TITLE_EN}}</div>
+
+        <div class="field">
+          <span class="label">חומר</span>
+          <span class="value">{{MATERIAL_SPEC}}</span>
+        </div>
+        <div class="field">
+          <span class="label">תהליך ריתוך</span>
+          <span class="value">{{PROCESS}}</span>
+        </div>
+        <div class="field">
+          <span class="label">תקן</span>
+          <span class="value">{{STANDARD}}</span>
+        </div>
+        <div class="field">
+          <span class="label">קנה מידה</span>
+          <span class="value"><bdi>{{SCALE}}</bdi></span>
+        </div>
+
+        <div class="field">
+          <span class="label">שורטט ע״י</span>
+          <span class="value">{{DRAWN_BY}}</span>
+        </div>
+        <div class="field">
+          <span class="label">מס׳ פריטים</span>
+          <span class="value"><bdi>{{PARTS_COUNT}}</bdi></span>
+        </div>
+        <div class="field">
+          <span class="label">מס׳ ריתוכים</span>
+          <span class="value"><bdi>{{WELDS_COUNT}}</bdi></span>
+        </div>
+        <div class="field warn">
+          <span class="label">ריתוך שדה</span>
+          <span class="value"><bdi>{{FIELD_WELDS_COUNT}}</bdi></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ===== DRAWING AREA ===== -->
+    <section class="drawing">
+      <span class="view-label">{{VIEW_LABEL}}</span>
+      {{VIEW_BODY}}
+      <span class="view-scale"><bdi>{{VIEW_SCALE}}</bdi></span>
+    </section>
+
+    <!-- ===== NOTES ===== -->
+    <aside class="notes">
+      <h3>הערות</h3>
+      {{NOTES_BODY}}
+    </aside>
+
+    <!-- ===== TABLES (BOM + WELDS) ===== -->
+    <section class="tables">
+      <div class="tbl-wrap">
+        <h3>רשימת חומרים — BOM</h3>
+        <table class="bom">
+          <thead>
+            <tr>
+              <th class="num">#</th>
+              <th>תיאור</th>
+              <th>מפרט</th>
+              <th>אורך (מ״מ)</th>
+              <th class="num">כמות</th>
+            </tr>
+          </thead>
+          <tbody>{{BOM_ROWS}}</tbody>
+        </table>
+      </div>
+
+      <div class="tbl-wrap">
+        <h3>טבלת ריתוכים</h3>
+        <table class="welds">
+          <thead>
+            <tr>
+              <th class="num">סימון</th>
+              <th>סוג</th>
+              <th>צד</th>
+              <th>גודל</th>
+              <th>אורך</th>
+              <th>תהליך</th>
+              <th>פריטים</th>
+              <th>הערה</th>
+            </tr>
+          </thead>
+          <tbody>{{WELD_ROWS}}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== REVISIONS ===== -->
+    <aside class="revs">
+      <h3>היסטוריית גרסאות</h3>
+      {{REVISIONS_BODY}}
+    </aside>
+
+  </main>
+</body>
+</html>
