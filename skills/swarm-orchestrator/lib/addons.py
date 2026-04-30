@@ -624,8 +624,8 @@ def _cli() -> int:
         ok = True
         for a in registry.list():
             issues: list[str] = []
-            if not a.skills and not a.recipes and not a.templates and not a.workflows:
-                issues.append("addon contributes nothing (no skills/recipes/templates/workflows)")
+            if not a.skills and not a.recipes and not a.templates and not a.workflows and not a.hooks:
+                issues.append("addon contributes nothing (no skills/recipes/templates/workflows/hooks)")
             if a.requires:
                 for r in a.requires:
                     if r not in registry.addons_by_name:
