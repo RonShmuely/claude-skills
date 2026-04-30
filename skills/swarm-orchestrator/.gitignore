@@ -19,6 +19,11 @@ local/
 memory/operations/*/
 !memory/operations/.gitkeep
 
+# Per-machine vault emissions — written when the user has an Obsidian vault
+# whose Skills/ junction targets this skill. Always per-machine, never repo.
+runs/                   # obsidian-emit addon: one .md per swarm run
+improvements/           # /swarm-collect command: meta-improvement digests
+
 # Knowledge tier — local SQLite + embeddings (per-machine)
 memory/knowledge/*.sqlite
 memory/knowledge/*.sqlite-shm
