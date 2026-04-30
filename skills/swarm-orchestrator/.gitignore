@@ -19,6 +19,11 @@ local/
 memory/operations/*/
 !memory/operations/.gitkeep
 
+# obsidian-emit addon — per-run markdown projections written to user's vault.
+# When the vault's Skills/ junction targets this skill, the output lands here
+# at runs/. Always per-machine, never committed to the skill repo.
+runs/
+
 # Knowledge tier — local SQLite + embeddings (per-machine)
 memory/knowledge/*.sqlite
 memory/knowledge/*.sqlite-shm

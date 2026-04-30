@@ -1,0 +1,27 @@
+name: obsidian-emit
+version: 1.0.0
+description: >
+  Emit one markdown file per swarm run into an Obsidian vault on the
+  synthesis_done hook. Reads the operations session artifacts (synthesis.md,
+  cost-report.md, agents/*.json, gate-result.json) and writes a frontmatter-
+  rich markdown projection to <vault>/Skills/swarm-orchestrator/runs/. Makes
+  swarm history searchable, link-able, and graph-visible alongside memory
+  and plans. Read-only projection — never mutates source artifacts.
+author: Ron Shmuely (claude-skills/swarm-orchestrator)
+swarm_orchestrator_min: ">=2.0.0"
+status: enabled
+priority: 50
+tags: [observability, obsidian, runs, projection]
+
+requires: []
+
+# Vault path resolution order (first hit wins):
+#   1. ~/.claude/swarm-orchestrator/settings.json
+#      → addons["obsidian-emit"].vault_path
+#   2. Env var SWARM_OBSIDIAN_VAULT
+#   3. Auto-detect: ~/Desktop/Obsidian/<single-vault>/.obsidian/
+# If none resolves, the hook logs "vault not configured, skipping" and exits 0.
+provides:
+  hooks:
+    - "on": synthesis_done   # quoted to prevent YAML 1.1 booleanization of "on"
+      run: hooks/synthesis_done.py
